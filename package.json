@@ -1,0 +1,26 @@
+{
+  "name": "yeosu-career-quest",
+  "productName": "여수캠퍼스 진로탐험",
+  "version": "1.0.0",
+  "description": "전남대학교 여수캠퍼스 학과 탐색 3D 직업체험 게임",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web": "node serve.js",
+    "dist": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:linux": "electron-builder --linux AppImage"
+    ,"dist:win": "electron-builder --win"
+  },
+  "dependencies": { "three": "0.160.0" },
+  "devDependencies": { "electron": "^31.0.0", "electron-builder": "^24.13.3" },
+  "build": {
+    "appId": "kr.ac.jnu.yeosu.careerquest",
+    "productName": "여수캠퍼스 진로탐험",
+    "artifactName": "YeosuCareerQuest-${version}-${os}.${ext}",
+    "directories": { "output": "release" },
+    "files": ["main.js", "index.html", "css/**/*", "src/**/*", "package.json", "!node_modules/three/examples/**", "!node_modules/three/src/**"],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true, "language": "1042" }
+  }
+}
