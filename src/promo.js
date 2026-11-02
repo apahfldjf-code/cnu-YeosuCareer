@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 
 export const PROMO = {
-  url: 'https://player.vimeo.com/progressive_redirect/download/1211873885/container/ec1ddaa3-366c-4d78-bc47-98393ecfe518/b753c0f9-6a7d6d7f/2026_%EC%A0%84%EB%82%A8%EB%8C%80%ED%95%99%EA%B5%90_%ED%99%8D%EB%B3%B4%EC%98%81%EC%83%81_%EA%B5%AD%EB%AC%B8_%EC%B5%9C%EC%A2%85%20%28720p%29.mp4?expires=1793422837&loc=external&signature=fc45328d3b6fb414998854a43c1899301c6ebe089271ade91dfa498b1d1e37b0',                                /* ← 여기에 홍보영상 링크를 붙여 넣으세요 (비워 두면 '준비 중' 화면) */
+  url: '2026_전남대학교_홍보영상_국문_최종 (360p).mp4',                                /* ← 여기에 홍보영상 링크를 붙여 넣으세요 (비워 두면 '준비 중' 화면) */
   title: '전남대학교 여수캠퍼스 홍보영상',
   logoFile: 'img/jnu-logo.png',
   hearNear: 17,   /* 이 거리(m) 안에서는 소리 100% */
