@@ -710,6 +710,7 @@ function openMenu() {
     const c = el('button', 'btn primary', '닫기'); c.onclick = closeModal; h.append(c); openM(h);
   });
   btn('🗑 기록 초기화', () => { if (confirm('체험 기록과 코인을 모두 지울까요?')) { S = reset(true); WS.campus.booths.forEach((b) => b.setDone(false)); hud(); closeModal(); toast('기록을 초기화했어요.'); } });
+  btn(`🎯 자동조준: ${AA.on ? 'ON' : 'OFF'}`, () => { AA.on = !AA.on; localStorage.setItem('cq_autoaim', AA.on ? '1' : '0'); closeModal(); toast(AA.on ? '🎯 자동조준 ON' : '자동조준 OFF'); });
   btn('🏠 타이틀로', () => location.reload());
   openM(box);
 }
