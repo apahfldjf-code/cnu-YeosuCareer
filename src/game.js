@@ -29,7 +29,7 @@
  * ═══════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { DEPTS, COLLEGES, ITEMS, LOOT, WORLDS, AMMO_NAMES } from './data.js';
-import { load, save, reset, sfx, engine, setSound, isSoundOn, createCharacter, CUSTOM, randomLook,
+import { load, save, reset, sfx, setSound, isSoundOn, createCharacter, CUSTOM, randomLook,
   Ball, Kart, makeKartMesh, Inventory, Drone, makeGunMesh, makeItemMesh, $, el, toast, openModal, closeModal, isModalOpen } from './core.js';
 import { buildWorlds } from './world.js';
 import { isTouch, initTouch, adaptQuality, renderInfo, touchSync, joy, QUALITIES, applyQuality, buzz, goFullscreen, TOUCH_HELP } from './input.js';
@@ -54,6 +54,8 @@ import './exp-sea5.js';
 import './exp-sea6.js';
 import { analyze, drawRadar, reportPNG } from './report.js';
 import { initDisplay, tickDisplay } from './display.js';
+import { engine } from './engine-sound.js';
+import './touch-hud.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
