@@ -152,6 +152,102 @@ function makePortal(root, anims, { x, z, to, sign, color, label: text }) {
   anims.push((dt, t) => { disc.rotation.z += dt * 1.6; disc.material.opacity = 0.7 + Math.sin(t * 3) * 0.15; em.emissiveIntensity = 1.2 + Math.sin(t * 4) * 0.4; });
   return { x, z, r: 4, to, label: text };
 }
+/* ───── 광장 → 포털 돌길 : 돌길 + 바닥 화살표(체험명) + 옅은 발광 라인 + 입구 이정표 ───── */
+const PATH = { r0: 23, r1: 96, w: 5, gateR: 27.5 };
+let PATH_ASSET = null;
+function pathAssets() {
+  if (PATH_ASSET) return PATH_ASSET;
+  const L = PATH.r1 - PATH.r0, R = mulberry(5), shade = [];
+  for (let r = 0; r < 4; r++) { shade.push([]); for (let i = 0; i < 4; i++) shade[r].push(R()); }
+  /* 돌길 타일: 한 장이 5m × 5m, 길이 방향으로 반복 */
+  const stone = canvasTex(256, 256, (x, w, h) => {
+    x.fillStyle = '#8a8478'; x.fillRect(0, 0, w, h);
+    const sw = w / 4, sh = h / 4;
+    for (let r = 0; r < 4; r++) for (let i = -1; i < 4; i++) {
+      const X = i * sw + (r % 2) * sw / 2, v = shade[r][(i + 4) % 4], c = 196 + ((v * 26) | 0);
+      x.fillStyle = `rgb(${c},${c - 6},${c - 20})`; rrect(x, X + 3, r * sh + 3, sw - 6, sh - 6, 8); x.fill();
+    }
+    for (let k = 0; k < 260; k++) { x.fillStyle = `rgba(90,80,60,${0.05 + R() * 0.08})`; x.fillRect(R() * w, R() * h, 2, 2); }
+    x.fillStyle = '#6a655a'; x.fillRect(0, 0, w, 6); x.fillRect(0, h - 6, w, 6);   // 양쪽 가장자리 돌
+  });
+  stone.wrapS = stone.wrapT = THREE.RepeatWrapping; stone.repeat.set(L / PATH.w, 1);
+  /* 발광 라인용 무늬: 길 방향으로 밝았다 흐려지는 띠(흘러가는 느낌), 폭 방향으로 가장자리가 부드럽게 */
+  const glow = canvasTex(128, 16, (x, w, h) => {
+    const gx = x.createLinearGradient(0, 0, w, 0);
+    gx.addColorStop(0, 'rgba(255,255,255,.35)'); gx.addColorStop(0.5, 'rgba(255,255,255,1)'); gx.addColorStop(1, 'rgba(255,255,255,.35)');
+    x.fillStyle = gx; x.fillRect(0, 0, w, h);
+    x.globalCompositeOperation = 'destination-in';
+    const gy = x.createLinearGradient(0, 0, 0, h);
+    gy.addColorStop(0, 'rgba(0,0,0,0)'); gy.addColorStop(0.5, 'rgba(0,0,0,1)'); gy.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = gy; x.fillRect(0, 0, w, h); x.globalCompositeOperation = 'source-over';
+  });
+  glow.wrapS = glow.wrapT = THREE.RepeatWrapping; glow.repeat.set(L / 10, 1);
+  const mat = new THREE.MeshStandardMaterial({ map: stone, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  return (PATH_ASSET = { stone, glow, mat });
+}
+/* 바닥 화살표: 이름이 있으면 큰 화살표 + 체험명 판, 없으면 진행 방향 쐐기(>) 3개 */
+function arrowDecal(color, text) {
+  return canvasTex(256, 256, (x, w, h) => {
+    x.lineJoin = 'round'; x.lineCap = 'round';
+    if (text) {
+      const cy = 72, s = 52;
+      x.beginPath(); x.moveTo(w / 2, cy - s); x.lineTo(w / 2 + s * 0.95, cy + s * 0.25); x.lineTo(w / 2 + s * 0.42, cy + s * 0.25);
+      x.lineTo(w / 2 + s * 0.42, cy + s * 0.9); x.lineTo(w / 2 - s * 0.42, cy + s * 0.9); x.lineTo(w / 2 - s * 0.42, cy + s * 0.25);
+      x.lineTo(w / 2 - s * 0.95, cy + s * 0.25); x.closePath();
+      x.fillStyle = color; x.fill(); x.lineWidth = 8; x.strokeStyle = 'rgba(255,255,255,.92)'; x.stroke();
+      rrect(x, 14, 150, w - 28, 92, 22); x.fillStyle = 'rgba(10,30,60,.82)'; x.fill(); x.lineWidth = 4; x.strokeStyle = 'rgba(255,255,255,.85)'; x.stroke();
+      x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      let sz = 46; do { x.font = `bold ${sz}px ${FONT}`; sz -= 2; } while (x.measureText(text).width > w - 60 && sz > 18);
+      x.fillText(text, w / 2, 198);
+    } else {
+      [[190, 0.5], [130, 0.78], [70, 1]].forEach(([cy, al]) => {
+        x.globalAlpha = al; x.beginPath(); x.moveTo(w * 0.18, cy + 34); x.lineTo(w / 2, cy - 22); x.lineTo(w * 0.82, cy + 34);
+        x.lineWidth = 40; x.strokeStyle = 'rgba(255,255,255,.95)'; x.stroke(); x.lineWidth = 24; x.strokeStyle = color; x.stroke();
+      });
+      x.globalAlpha = 1;
+    }
+  });
+}
+function makePath(root, anims, colliders, { deg, color, sign }) {
+  const A = pathAssets(), a = rad(deg), L = PATH.r1 - PATH.r0, W = PATH.w, mid = (PATH.r0 + PATH.r1) / 2;
+  const g = new THREE.Group(); g.rotation.y = -a; root.add(g);            // 로컬 +x = 포털 방향, +z = 진행 방향 기준 오른쪽
+  const flatGeo = (len, wid) => { const geo = new THREE.PlaneGeometry(len, wid); geo.rotateX(-HP); return geo; };
+  /* 돌길 */
+  const road = new THREE.Mesh(flatGeo(L, W), A.mat); road.position.set(mid, 0.05, 0); road.receiveShadow = true; g.add(road);
+  /* 양옆 옅은 발광 라인 (부드러운 빛 + 가는 선) */
+  const halos = [], white = new THREE.Color('#ffffff');
+  for (const s of [-1, 1]) {
+    const hm = new THREE.MeshBasicMaterial({ map: A.glow, color, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
+    const hl = new THREE.Mesh(flatGeo(L, 1.1), hm); hl.position.set(mid, 0.06, s * (W / 2 + 0.05)); g.add(hl); halos.push(hm);
+    const cm = new THREE.MeshBasicMaterial({ color: new THREE.Color(color).lerp(white, 0.55), transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 });
+    const cl = new THREE.Mesh(flatGeo(L, 0.1), cm); cl.position.set(mid, 0.065, s * (W / 2 + 0.05)); g.add(cl);
+  }
+  /* 바닥 화살표: 체험명 판(33·61·89m)과 쐐기(47·75m)를 번갈아 */
+  const nameTex = arrowDecal(color, sign), chevTex = arrowDecal(color, '');
+  const dGeo = new THREE.PlaneGeometry(4.4, 4.4); dGeo.rotateX(-HP); dGeo.rotateY(-HP);   // 글씨 위쪽 = 포털 방향
+  const decals = [];
+  [[33, true], [47, false], [61, true], [75, false], [89, true]].forEach(([r, named]) => {
+    const dm = new THREE.MeshBasicMaterial({ map: named ? nameTex : chevTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8 });
+    const d = new THREE.Mesh(dGeo, dm); d.position.set(r, 0.07, 0); g.add(d); decals.push(dm);
+  });
+  /* 입구 이정표: 광장에서 돌길로 들어서는 자리의 문(門) + 체험명·거리 간판 */
+  const GR = PATH.gateR, dark = M('#2b3350'), em = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2, roughness: 0.4 });
+  for (const s of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.55, 5.6, 0.55), dark); post.position.set(GR, 2.8, s * 3.6); post.castShadow = true; g.add(post);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 8), em); cap.position.set(GR, 5.9, s * 3.6); g.add(cap);
+    colliders.push({ x: Math.cos(a) * GR - Math.sin(a) * s * 3.6, z: Math.sin(a) * GR + Math.cos(a) * s * 3.6, r: 0.5, h: 5.6 });
+  }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 7.7), em); beam.position.set(GR, 5.35, 0); g.add(beam);
+  const dist = Math.round(100 - GR);
+  const sg = label(`${sign}  ▶ ${dist}m`, { bg: color, scale: 10 }); sg.position.set(GR, 8.2, 0); g.add(sg);
+  /* 움직임: 발광 띠가 포털 쪽으로 흐르고, 바닥 화살표가 차례로 반짝 */
+  anims.push((dt, t) => {
+    A.glow.offset.x = -t * 0.18;
+    halos.forEach((m) => { m.opacity = 0.42 + Math.sin(t * 2.2) * 0.1; });
+    decals.forEach((m, i) => { m.opacity = 0.65 + 0.35 * (0.5 + 0.5 * Math.sin(t * 3 - i * 0.9)); });
+  });
+}
+
 /* 벽 한 줄(메시 + 충돌 원) */
 function seg(root, colliders, x1, z1, x2, z2, mat, h = 3.6) {
   const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz);
@@ -334,11 +430,13 @@ decorateAll(booths);
 
   /* 가로등 · 벤치 */
   for (let k = 0; k < 10; k++) {
+    if (k === 8) continue;   // 306° 가로등: 축구 돌길 위
     const a = rad(18 + k * 36), lx = Math.cos(a) * 25.8, lz = Math.sin(a) * 25.8;
     box(0.18, 4.4, 0.18, M('#2b2f3a'), lx, 2.2, lz);
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), new THREE.MeshStandardMaterial({ color: '#fff2c0', emissive: '#ffcf70', emissiveIntensity: 1.5 })); bulb.position.set(lx, 4.6, lz); root.add(bulb); col(lx, lz, 0.3, 4.6);
   }
   for (let k = 0; k < 6; k++) {
+    if (k === 0) continue;   // 30° 벤치: FPS 돌길 위
     const a = rad(30 + k * 60), bx = Math.cos(a) * 28.5, bz = Math.sin(a) * 28.5, bg = new THREE.Group(), wd = M('#8a5a34');
     bg.position.set(bx, 0, bz); bg.rotation.y = Math.atan2(-bx, -bz); root.add(bg);
     [[new THREE.BoxGeometry(2.4, 0.18, 0.7), 0, 0.55, 0], [new THREE.BoxGeometry(2.4, 0.6, 0.12), 0, 0.95, -0.3], [new THREE.BoxGeometry(0.15, 0.55, 0.6), -1.0, 0.27, 0], [new THREE.BoxGeometry(0.15, 0.55, 0.6), 1.0, 0.27, 0]].forEach(([geo, px, py, pz]) => { const m = new THREE.Mesh(geo, wd); m.position.set(px, py, pz); m.castShadow = true; bg.add(m); });
@@ -384,13 +482,20 @@ decorateAll(booths);
   /* 포털 (다른 월드로) */
   [[188, 'race', '🏎️ 레이싱 서킷', '#ff6b3d'], [302, 'soccer', '⚽ 축구 스타디움', '#2fbf71'], [29, 'fps', '🎯 FPS 훈련장', '#e04a5a']].forEach(([deg, to, text, color]) => {
     portals.push(makePortal(root, anims, { x: Math.cos(rad(deg)) * 100, z: Math.sin(rad(deg)) * 100, to, sign: text, color, label: `${text} 입장` }));
+    makePath(root, anims, colliders, { deg, color, sign: text });
   });
   const portalFar = (x, z) => portals.every((p) => Math.hypot(p.x - x, p.z - z) > 12);
 
+  /* 돌길 위(폭 ±7m)에는 나무를 심지 않아요 */
+  const offPath = (x, z) => [188, 302, 29].every((d) => {
+    const ca = Math.cos(rad(d)), sa = Math.sin(rad(d)), al = x * ca + z * sa, la = Math.abs(z * ca - x * sa);
+    return !(al > 16 && al < 106 && la < 7);
+  });
+
   /* 나무 */
-  const bAcc = (x, z) => free(x, z, 4) && booths.every((b) => Math.hypot(b.x - x, b.z - z) > 9) && portalFar(x, z);
+  const bAcc = (x, z) => free(x, z, 4) && booths.every((b) => Math.hypot(b.x - x, b.z - z) > 9) && portalFar(x, z) && offPath(x, z);
   trees(root, colliders, R, 45, ringPick(R, 28, 86), bAcc);
-  trees(root, colliders, R, 85, ringPick(R, 90, 116), (x, z) => free(x, z, 3) && portalFar(x, z) && Math.hypot(x - Math.cos(rad(248)) * 104, z - Math.sin(rad(248)) * 104) > 16);
+  trees(root, colliders, R, 85, ringPick(R, 90, 116), (x, z) => free(x, z, 3) && portalFar(x, z) && offPath(x, z) && offPath(x, z) && Math.hypot(x - Math.cos(rad(248)) * 104, z - Math.sin(rad(248)) * 104) > 16);
 
   /* 코인 */
   const addCoin = coinMaker(root, coins); let cn = 0, gd = 0;
