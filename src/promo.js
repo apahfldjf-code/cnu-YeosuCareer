@@ -13,7 +13,7 @@ import * as THREE from 'three';
 
 export const PROMO = {
   url: '2026_전남대학교_홍보영상_국문_최종 (360p).mp4',                                /* ← 여기에 홍보영상 링크를 붙여 넣으세요 (비워 두면 '준비 중' 화면) */
-  title: '전남대학교 여수캠퍼스 홍보영상',
+  title: '전남대학교 홍보영상',
   logoFile: 'img/jnu-logo.png',
   hearNear: 17,   /* 이 거리(m) 안에서는 소리 100% */
   hearFar: 32,    /* 이 거리(m) 밖에서는 소리 0 */
