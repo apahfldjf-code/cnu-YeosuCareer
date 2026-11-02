@@ -56,6 +56,7 @@ import { analyze, drawRadar, reportPNG } from './report.js';
 import { initDisplay, tickDisplay } from './display.js';
 import { engine } from './engine-sound.js';
 import './touch-hud.js';
+import './guestbook.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
