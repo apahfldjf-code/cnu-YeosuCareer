@@ -892,3 +892,50 @@ function frame() {
   const l = $('#loading'); if (l) l.remove();
 }
 frame();
+
+/* ═════ 모바일 자동조준(추적) — 총을 든 FPS 1인칭에서만 동작 ═════ */
+const AA = { on: localStorage.getItem('cq_autoaim') !== '0', tgt: null, scan: 0, last: performance.now(), lock: false };
+const AA_YAW = 1, AA_PITCH = 1;   // 화면이 목표 반대로 돌면 해당 값을 -1 로 바꿔요
+
+function aaLock(on) {
+  if (AA.lock === on) return; AA.lock = on;
+  ui.cross.style.borderColor = on ? '#ff6a5a' : '';
+}
+function aaScan() {
+  const o = camera.position, d = new THREE.Vector3(); camera.getWorldDirection(d);
+  let best = null, bs = 1e9;
+  for (const dr of drones) {
+    if (!dr.alive) continue;
+    const v = dr.center().clone().sub(o), L = v.length(); if (L < 1.5 || L > 70) continue; v.divideScalar(L);
+    const ang = Math.acos(clamp(v.dot(d), -1, 1)); if (ang > 0.7) continue;           // 시야 중앙 ±40° 안
+    const r = castRay(o, v, L + 0.5); if (!(r.hit && r.hit.drone === dr)) continue;   // 벽에 가려지면 제외
+    const sc = ang + (dr === AA.tgt ? -0.15 : 0) + L * 0.002;                         // 기존 목표 유지 + 가까운 쪽 우선
+    if (sc < bs) { bs = sc; best = dr; }
+  }
+  AA.tgt = best;
+}
+function aaStep(dt) {
+  const act = AA.on && isTouch && cur.id === 'fps' && mode === 'play' && view === 'fps' && !kart.active && heldDef();
+  if (!act) { AA.tgt = null; aaLock(false); return; }
+  AA.scan -= dt; if (AA.scan <= 0) { AA.scan = 0.12; aaScan(); }
+  const dr = AA.tgt; if (!dr || !dr.alive) { aaLock(false); return; }
+  const o = camera.position, d = new THREE.Vector3(); camera.getWorldDirection(d);
+  const v = dr.center().clone().sub(o), L = v.length(); if (L < 1) return; v.divideScalar(L);
+  let ey = Math.atan2(v.x, v.z) - Math.atan2(d.x, d.z); ey = Math.atan2(Math.sin(ey), Math.cos(ey));
+  const ep = Math.asin(clamp(v.y, -1, 1)) - Math.asin(clamp(d.y, -1, 1));
+  const err = Math.hypot(ey, ep);
+  const firing = ptr.down[0] || P.cd > 0;
+  let k = firing ? 9 : (err < 0.12 ? 3 : 0);                 // 발사 중 강하게, 평소엔 근처일 때만 약하게
+  if (performance.now() - (cam.lastDrag || 0) < 180) k *= 0.3; // 내가 드래그 중이면 약하게
+  if (k <= 0) { aaLock(false); return; }
+  const f = 1 - Math.exp(-k * dt);
+  cam.yaw += AA_YAW * clamp(ey * f, -0.12, 0.12);
+  cam.aim = clamp(cam.aim + AA_PITCH * clamp(ep * f, -0.12, 0.12), -1.35, 1.35);
+  aaLock(err < 0.05);
+}
+(function aaLoop() {
+  requestAnimationFrame(aaLoop);
+  const n = performance.now(), dt = Math.min(0.05, (n - AA.last) / 1000); AA.last = n;
+  try { aaStep(dt); } catch (e) { /* 자동조준 오류가 게임을 멈추지 않게 */ }
+})();
+window.__aa = () => ({ on: AA.on, target: !!AA.tgt, lock: AA.lock, yaw: +cam.yaw.toFixed(2), aim: +cam.aim.toFixed(2) });
