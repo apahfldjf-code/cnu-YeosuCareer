@@ -298,6 +298,7 @@ function buildCampus(scene) {
     list.forEach((d, i) => rings[i % 2][1].push(d));
     rings.forEach(([r, arr], ri) => arr.forEach((d, j) => { const t = (j + (ri === 0 ? 0.25 : 0.75)) / arr.length, a = rad(C.a0 + t * (C.a1 - C.a0)); makeBooth(d, gi++, r * Math.cos(a), r * Math.sin(a)); }));
   }
+decorateAll(booths);
 
   /* 중앙 돔 — 전남대학교 로고가 회전해요 (창의융합학부는 아래에서 별도 부스로 분리) */
   (function makeDome() {
@@ -316,11 +317,6 @@ function buildCampus(scene) {
     for (let k = 0; k < 24; k++) { if (k >= 5 && k <= 7) continue; const a = (k / 24) * TAU; col(Math.cos(a) * 8.2, -12 + Math.sin(a) * 8.2, 1.1, 8); }
     col(0, -12, 1.8, 4); col(-2.6, -3.5, 0.5, 6); col(2.6, -3.5, 0.5, 6);
   })();
-
-  /* 창의융합학부 — 대학 직할 학부 별도 부스 (위치를 옮기려면 x, z 만 바꾸세요) */
-  const CRE_BOOTH = { x: -17, z: -4 };
-  makeBooth(DEPTS.find((q) => q.col === 'cre'), gi++, CRE_BOOTH.x, CRE_BOOTH.z);
-  decorateAll(booths);
 
   /* 홍보영상 전광판 — 돔 오른쪽 (영상 링크는 src/promo.js 의 PROMO.url) */
   makePromoBoard(root, { x: 12, z: 1, w: 15, face: Math.atan2(0 - 18, 24 - (-14)), anims, col, label });
