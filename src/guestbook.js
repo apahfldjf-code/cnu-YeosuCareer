@@ -15,7 +15,7 @@
 import { isTouch } from './input.js';
 
 const GB = {
-  url: 'https://script.google.com/macros/s/AKfycbzdfFVNidbFELWCZMZrcOE9nGBcj531z4gUM1iuJBq2lUDWCS9_rw2cW0-eDIpkPTOq/exec',                        // ← Apps Script 웹 앱 주소(…/exec)
+  url: 'https://script.google.com/a/macros/jnu.ac.kr/s/AKfycbyxpIGZmUr5rtxfZ0Okeflban1-G6krZuZ7G_v5FLqKQTw1-tNw1ONRNiX14dSZeVM5/exec',                        // ← Apps Script 웹 앱 주소(…/exec)
   once: true,                     // 브라우저를 켠 뒤 한 번만 묻기 (타이틀로 돌아가도 다시 묻지 않음)
   keep: '행사 종료 후 30일',        // 동의 문구에 들어가는 보관 기간 (실제 기간에 맞게 수정)
 };
