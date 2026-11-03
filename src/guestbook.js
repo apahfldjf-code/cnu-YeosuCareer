@@ -79,7 +79,7 @@ const CSS = `
 #gb-box .gb-row button:disabled{opacity:.5}
 `;
 
-const GRADES = ['선택 안 함', '고등학교 1학년', '고등학교 2학년', '고등학교 3학년', '졸업생·기타', '학부모', '교사'];
+const GRADES = ['선택 안 함', '초등학교', '중학교','고등학교', '대학생', '기타(주민)', '학부모', '교사'];
 const INTERESTS = ['선택 안 함', '공학', '수산해양', '문화사회과학', '아직 잘 모르겠어요'];
 const opts = (a) => a.map((t, i) => `<option value="${i ? t : ''}">${t}</option>`).join('');
 
