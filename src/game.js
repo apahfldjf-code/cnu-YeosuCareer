@@ -839,7 +839,8 @@ function update(dt, t) {
   cur.update(dt, t);
   if (mode === 'title') {
     const a = t * 0.35; P.char.walk(t, 0); P.char.tick(dt); P.char.group.rotation.y = P.yaw;
-    camera.position.set(P.x + Math.sin(a) * 4.6, 2.3, P.z + Math.cos(a) * 4.6); camera.lookAt(P.x, 1.4, P.z);
+    const TD = isTouch ? 5.8 : 4.6;
+    camera.position.set(P.x + Math.sin(a) * TD, isTouch ? 2.2 : 2.3, P.z + Math.cos(a) * TD); camera.lookAt(P.x, isTouch ? 1.15 : 1.4, P.z);
   } else {
     if (mode === 'play') { if (kart.active) driveKart(dt, true); else { movePlayer(dt, t); combatUpdate(dt, t); } }
     else if (kart.active) driveKart(dt, false); else { P.vx *= 0.8; P.vz *= 0.8; P.char.walk(t, 0); P.char.tick(dt); }
