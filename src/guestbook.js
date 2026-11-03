@@ -91,12 +91,12 @@ function openForm(done) {
   w.innerHTML = `
   <div id="gb-box" role="dialog" aria-label="방명록">
     <h2>📖 방명록을 남겨 주세요</h2>
-    <p>여수캠퍼스 진로탐험에 와 주셔서 고마워요! 남기지 않아도 체험은 그대로 할 수 있어요.</p>
+    <p>여수캠퍼스 진로탐험에 오신것을 환영합니다! 즐거운 체험 되시기 바랍니다.</p>
     <div class="gb-grid">
-      <div><label>이름 또는 닉네임 *</label><input id="gb-name" type="text" maxlength="20" autocomplete="off"></div>
+      <div><label>이름 *</label><input id="gb-name" type="text" maxlength="20" autocomplete="off"></div>
       <div><label>학교 (선택)</label><input id="gb-school" type="text" maxlength="30" autocomplete="off"></div>
       <div><label>구분 (선택)</label><select id="gb-grade">${opts(GRADES)}</select></div>
-      <div><label>관심 계열 (선택)</label><select id="gb-int">${opts(INTERESTS)}</select></div>
+      <div><label>관심 분야 (선택)</label><select id="gb-int">${opts(INTERESTS)}</select></div>
       <div class="full"><label>한마디 (선택, 100자까지)</label><textarea id="gb-msg" maxlength="100" placeholder="오늘 체험하고 싶은 학과나 소감을 적어 주세요"></textarea></div>
     </div>
     <input id="gb-hp" type="text" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;opacity:0">
@@ -113,7 +113,7 @@ function openForm(done) {
   $('#gb-skip').onclick = () => { remember(); close(); done(); };
   $('#gb-send').onclick = () => {
     const name = $('#gb-name').value.trim(), err = $('#gb-err');
-    if (!name) { err.textContent = '이름이나 닉네임을 적어 주세요.'; return; }
+    if (!name) { err.textContent = '이름을 적어 주세요.'; return; }
     if (!$('#gb-ok').checked) { err.textContent = '동의하면 남길 수 있어요. 동의하지 않으면 "건너뛰고 시작"을 눌러 주세요.'; return; }
     const d = {
       name, school: $('#gb-school').value.trim(), grade: $('#gb-grade').value, interest: $('#gb-int').value, msg: $('#gb-msg').value.trim(),
