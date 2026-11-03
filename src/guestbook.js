@@ -6,7 +6,7 @@
  *  - 콘솔 테스트: __gbtest()
  * ═══════════════════════════════════════════════════════════════ */
 const CFG = {
-  URL: 'https://script.google.com/macros/s/AKfycbzxImE-uStITy0yjomUHGMKlcrPKvs0TPYW9PG6jFOhRPgyfIib-CEi9KQqjWEHeYWa/exec',   // ← 기존 guestbook.js 의 주소를 그대로 붙여 넣기
+  URL: 'https://script.google.com/macros/s/AKfycbx32tjkGqKv7TR9N3w72dCwmB_VsYiN6Y0_VsiV38Cot3yiVRyEjLaG8KTJoj3SOOjw/exec',   // ← 기존 guestbook.js 의 주소를 그대로 붙여 넣기
   ORG: '전남대학교 여수캠퍼스',
   RETENTION: '행사 종료 후 30일',    // ← 실제 보관 기간으로 수정
   ASK: 'load',                       // 'load' = 접속할 때마다 작성 / 'once' = 이 기기에서 한 번만
