@@ -57,6 +57,7 @@ import { initDisplay, tickDisplay } from './display.js';
 import { engine } from './engine-sound.js';
 import './touch-hud.js';
 import './guestbook.js';
+import './title-mobile.js';
 import { createFishing } from './fishing.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
