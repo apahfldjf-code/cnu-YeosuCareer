@@ -220,7 +220,7 @@ cvs.addEventListener('mousemove', (e) => { if (mode === 'play' && ptr.locked) lo
 cvs.addEventListener('wheel', (e) => { cam.dist = clamp(cam.dist + e.deltaY * 0.01, 4, 18); });
 function look(dx, dy) {
   const s = 0.0026 * (S.settings.sens || 1) * (ads ? 0.6 : 1); cam.yaw -= dx * s; cam.lastDrag = performance.now();
-  if (view === 'fps' && cur.id === 'fps' && !kart.active) cam.aim = clamp(cam.aim - dy * s, -1.35, 1.35); else cam.pitch = clamp(cam.pitch + dy * s, -0.04, 1.25);
+  if (view === 'fps' && cur.id === 'fps' && !kart.active) cam.aim = clamp(cam.aim - dy * s, -1.35, 1.35); else cam.pitch = clamp(cam.pitch + dy * s, -0.22, 1.25);
 }
 function onKey(e) {
   if (e.repeat) return; const c = e.code;
