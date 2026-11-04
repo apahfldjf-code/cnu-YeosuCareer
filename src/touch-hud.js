@@ -46,11 +46,16 @@ body.touch .slot{width:calc(var(--b)*.8)!important;height:calc(var(--b)*.8)!impo
 body.touch .slot b{font-size:calc(var(--b)*.4)!important}
 body.touch .slot i{font-size:8px!important;top:0!important;left:3px!important}
 body.touch .slot small{display:none!important}
+body.touch #bar>*{width:calc(var(--b)*.8)!important;height:calc(var(--b)*.8)!important;min-width:0!important;min-height:0!important;flex:none!important}
 
-/* ── FPS 체력·탄약 ── */
-body.touch #hpbox{top:34px!important;width:150px!important;height:14px!important}
-body.touch #hptxt{line-height:14px!important;font-size:10px!important}
-body.touch #ammobox{bottom:calc(var(--b)*.8 + 14px)!important;padding:3px 9px!important;font-size:11px!important}
+/* ── FPS 체력바·탄약: 상단 중앙에 한 줄로 고정 (체력바 왼쪽, 탄약 오른쪽) ── */
+body.touch #hudx #hpbox{left:50%!important;right:auto!important;bottom:auto!important;top:38px!important;transform:translateX(-50%)!important;
+  width:150px!important;height:14px!important;border-radius:7px!important}
+body.touch #hudx #hptxt{line-height:14px!important;font-size:10px!important}
+body.touch #hudx #ammobox{left:calc(50% + 84px)!important;right:auto!important;top:35px!important;bottom:auto!important;transform:none!important;
+  width:auto!important;height:auto!important;min-height:0!important;max-height:none!important;padding:2px 9px!important;border-radius:10px!important;
+  font-size:12px!important;line-height:18px!important;white-space:nowrap!important;text-align:left!important}
+body.touch #hudx #ammobox small,body.touch #hudx #ammobox br{display:none!important}
 body.touch #lockhint{display:none!important}
 
 /* ── 체험하기 상자 = 누르는 버튼 ── */
@@ -135,7 +140,32 @@ function tick() {
   const rep = $('#b-report'), men = $('#b-menu');
   if (rep && rep.textContent !== '📊') { rep.textContent = '📊'; rep.title = '리포트'; }
   if (men && men.textContent !== '⏸') { men.textContent = '⏸'; men.title = '메뉴'; }
-  hookPrompt();
+  hookPrompt(); hookAmmo(); enforce();
+}
+
+/* ── FPS 체력바·탄약·단축바: 다른 스타일에 밀려 중앙에 커지거나 길어지는 문제를 막으려고 직접 고정 ── */
+function enforce() {
+  const hp = $('#hpbox'), am = $('#ammobox');
+  if (hp) style(hp, { left: '50%', right: 'auto', top: '38px', bottom: 'auto', transform: 'translateX(-50%)', width: '150px', height: '14px' });
+  if (am) style(am, { left: 'calc(50% + 84px)', right: 'auto', top: '35px', bottom: 'auto', transform: 'none', width: 'auto', height: 'auto', 'min-height': '0', 'max-height': 'none' });
+  document.querySelectorAll('#bar>*').forEach((s) => style(s, { width: 'calc(var(--b)*.8)', height: 'calc(var(--b)*.8)', 'min-width': '0', flex: 'none' }));
+}
+
+/* 탄약 상자: "🔫 무기이름 12 / 0" → "🔫 12 / 0" 한 줄로 줄임 (무기 이름은 단축바에서 확인) */
+let amEl = null;
+function compactAmmo() {
+  const b = amEl; if (!b || b.dataset.c === b.innerHTML) return;
+  const t = (b.textContent || '').trim(); if (!t) return;
+  const sp = b.querySelector('span'), icon = t.split(/\s+/)[0];
+  let html;
+  if (sp) { const m = /\/\s*(\d+)\s*$/.exec(t); html = `${icon} <b style="font-size:16px">${sp.textContent.trim()}</b> <span style="opacity:.85">/ ${m ? m[1] : 0}</span>`; }
+  else html = t.split(/\s+/).slice(0, 2).join(' ');
+  b.innerHTML = html; b.dataset.c = b.innerHTML;
+}
+function hookAmmo() {
+  if (amEl || !(amEl = $('#ammobox'))) return;
+  new MutationObserver(compactAmmo).observe(amEl, { childList: true, characterData: true, subtree: true });
+  compactAmmo();
 }
 
 /* ── 체험하기 상자: [E]/[F] 글자 제거 + 누르면 실행 ── */
@@ -193,4 +223,8 @@ window.__thud = () => ({
   touch: isTouch,
   buttons: Object.fromEntries(Object.entries(found).map(([k, el]) => [k, (el.textContent || '').trim()])),
   prompt: (() => { const p = $('#prompt'); return p ? { text: p.textContent, key: p.dataset.k || null, shown: getComputedStyle(p).display !== 'none' } : null; })(),
+  fps: (() => {
+    const g = (s) => { const e = $(s); if (!e) return null; const r = e.getBoundingClientRect(), c = getComputedStyle(e); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height), pos: c.position, disp: c.display }; };
+    return { hp: g('#hpbox'), ammo: g('#ammobox'), bar: g('#bar'), slot: g('#bar > *') };
+  })(),
 });
