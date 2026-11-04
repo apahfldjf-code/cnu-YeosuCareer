@@ -59,6 +59,7 @@ import './touch-hud.js';
 import './guestbook.js';
 import './title-mobile.js';
 import { createFishing } from './fishing.js';
+import { initNpcs, tickNpcs } from './npc.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -151,6 +152,7 @@ function applyEnv(w) {
   Object.values(WS).forEach((x) => { x.root.visible = x === w; });
 }
 WS.campus.booths.forEach((b) => b.setDone(!!S.played[b.dept.id]));
+initNpcs(WS.campus, { quality: S.settings.q });
 
 const P = { x: cur.spawn.x, z: cur.spawn.z, y: 0, vx: 0, vz: 0, vy: 0, yaw: cur.spawn.yaw, char: null, cd: 0, atk: null };
 const kart = new Kart(WS.race.root), RW = WS.race.W; kart.place(WS.race.kartSpawn.x, WS.race.kartSpawn.z, WS.race.kartSpawn.yaw);
@@ -837,10 +839,10 @@ function checkGoal(b, dt) {
 function update(dt, t) {
   if (mode === 'exp') { if (exp) exp.update(dt, t); touchSync({ mode }); return; }
   cur.update(dt, t);
+  if (cur.id === 'campus') { const na = actor(); tickNpcs(dt, t, na.x, na.z, camera.position); }
   if (mode === 'title') {
     const a = t * 0.35; P.char.walk(t, 0); P.char.tick(dt); P.char.group.rotation.y = P.yaw;
-    const TD = isTouch ? 5.8 : 4.6;
-    camera.position.set(P.x + Math.sin(a) * TD, isTouch ? 2.2 : 2.3, P.z + Math.cos(a) * TD); camera.lookAt(P.x, isTouch ? 1.15 : 1.4, P.z);
+    camera.position.set(P.x + Math.sin(a) * 4.6, 2.3, P.z + Math.cos(a) * 4.6); camera.lookAt(P.x, 1.4, P.z);
   } else {
     if (mode === 'play') { if (kart.active) driveKart(dt, true); else { movePlayer(dt, t); combatUpdate(dt, t); } }
     else if (kart.active) driveKart(dt, false); else { P.vx *= 0.8; P.vz *= 0.8; P.char.walk(t, 0); P.char.tick(dt); }
