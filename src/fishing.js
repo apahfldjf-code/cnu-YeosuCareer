@@ -463,7 +463,16 @@ export function createFishing(D) {
 #fx.hold .b{visibility:hidden}
 #fx.hold .drag{pointer-events:none}
 body.touch #keys,body.fxon #keys{display:none!important}
-@media (max-height:520px){#fx .b{width:50px;height:50px;font-size:21px}#fx .act{width:72px;height:72px;font-size:30px}#fx .up{bottom:96px}#fx .left{bottom:18px}#fx .right{left:76px;bottom:18px}#fx .down{right:96px;bottom:22px}#fx .msg{bottom:132px}#fx .gauge{bottom:78px}}`;
+@media (max-height:520px){#fx .b{width:50px;height:50px;font-size:21px}#fx .act{width:72px;height:72px;font-size:30px}#fx .up{bottom:96px}#fx .left{bottom:18px}#fx .right{left:76px;bottom:18px}#fx .down{right:96px;bottom:22px}#fx .msg{bottom:132px}#fx .gauge{bottom:78px}}
+#fx .exit{left:auto!important;bottom:auto!important;right:14px!important;top:calc(50% - 26px)!important}
+#fx.sail .up{right:auto!important;left:16px!important;bottom:92px!important}
+#fx.sail .down{right:auto!important;left:16px!important;bottom:24px!important}
+#fx.sail .left{left:auto!important;right:86px!important;bottom:24px!important}
+#fx.sail .right{left:auto!important;right:16px!important;bottom:24px!important}
+#fx.sail .chart{top:calc(50% - 120px)!important}
+#fx.sail .anchor{top:calc(50% - 56px)!important}
+@media (max-height:520px){#fx.sail .up{bottom:80px!important}#fx.sail .down{bottom:18px!important}#fx.sail .left{right:76px!important;bottom:18px!important}#fx.sail .right{bottom:18px!important}}`;
+
   document.head.append(css);
   const ui = h('div'); ui.id = 'fx';
   ui.innerHTML = '<div class="drag"></div><div class="top"><b class="t1"></b><span class="t2"></span></div><div class="tn"></div><div class="msg"></div><div class="gauge"><div class="gl"></div><div class="gb"><i class="gn"></i></div><div class="gb2"><i class="gf"></i></div></div>'
@@ -831,7 +840,8 @@ body.touch #keys,body.fxon #keys{display:none!important}
     }
   }
   function uiUpdate() {
-    const sail = F.sub === 'sail', boat = F.kind === 'boat', prot = !!(F.zone && F.zone.protect);
+const sail = F.sub === 'sail', boat = F.kind === 'boat', prot = !!(F.zone && F.zone.protect);
+    ui.classList.toggle('sail', sail);
     setV(E.up, sail && !B.dock); setV(E.down, sail && !B.dock); setV(E.left, F.sub === 'fish' || (sail && !B.dock)); setV(E.right, F.sub === 'fish' || (sail && !B.dock));
     setV(E.act, F.sub === 'fish'); setV(E.chart, boat && !B.dock); setV(E.anchor, boat && !B.dock && !(sail && B.docked));
     setH(E.act, prot ? '🔭' : '🎣'); setH(E.anchor, sail ? '⚓<small>내리기</small>' : '⚓<small>올리기</small>');
