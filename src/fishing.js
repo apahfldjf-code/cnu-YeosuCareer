@@ -842,12 +842,20 @@ body.touch #keys,body.fxon #keys{display:none!important}
   function uiUpdate() {
 const sail = F.sub === 'sail', boat = F.kind === 'boat', prot = !!(F.zone && F.zone.protect);
     ui.classList.toggle('sail', sail);
-    if (!window.__fxPinT) window.__fxPinT = setInterval(() => {
-      const u = document.getElementById('fx'); if (!u) return;
-      const on = u.classList.contains('sail'), b = u.querySelector('.exit'); if (!b) return;
-      const S = { left: 'auto', bottom: 'auto', right: '14px', top: 'calc(50% - 30px)', width: '60px', height: '60px' };
-      for (const k in S) { if (on) b.style.setProperty(k, S[k], 'important'); else b.style.removeProperty(k); }
-    }, 100);
+    if (!window.__fxPin) {
+      window.__fxPin = true;
+      const PIN = { position: 'fixed', left: 'auto', bottom: 'auto', right: '14px', top: 'calc(50% - 30px)', width: '60px', height: '60px', transform: 'none', margin: '0', zoom: '1' };
+      let pinned = false;
+      (function pin() {
+        requestAnimationFrame(pin);
+        const b = E.exit; if (!b) return;
+        const on = ui.classList.contains('sail');
+        if (on) { for (const k in PIN) b.style.setProperty(k, PIN[k], 'important'); pinned = true; }
+        else if (pinned) { for (const k in PIN) b.style.removeProperty(k); pinned = false; }
+      })();
+      window.__fxpin = () => { const b = E.exit; const r = b && b.getBoundingClientRect(); return { found: !!b, sail: ui.classList.contains('sail'), parent: b && b.parentElement && (b.parentElement.id || b.parentElement.className), rect: r && [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] }; };
+    }
+
     setV(E.up, sail && !B.dock); setV(E.down, sail && !B.dock); setV(E.left, F.sub === 'fish' || (sail && !B.dock)); setV(E.right, F.sub === 'fish' || (sail && !B.dock));
     setV(E.act, F.sub === 'fish'); setV(E.chart, boat && !B.dock); setV(E.anchor, boat && !B.dock && !(sail && B.docked));
     setH(E.act, prot ? '🔭' : '🎣'); setH(E.anchor, sail ? '⚓<small>내리기</small>' : '⚓<small>올리기</small>');
