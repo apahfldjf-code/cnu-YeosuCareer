@@ -842,6 +842,12 @@ body.touch #keys,body.fxon #keys{display:none!important}
   function uiUpdate() {
 const sail = F.sub === 'sail', boat = F.kind === 'boat', prot = !!(F.zone && F.zone.protect);
     ui.classList.toggle('sail', sail);
+    if (!window.__fxPinT) window.__fxPinT = setInterval(() => {
+      const u = document.getElementById('fx'); if (!u) return;
+      const on = u.classList.contains('sail'), b = u.querySelector('.exit'); if (!b) return;
+      const S = { left: 'auto', bottom: 'auto', right: '14px', top: 'calc(50% - 30px)', width: '60px', height: '60px' };
+      for (const k in S) { if (on) b.style.setProperty(k, S[k], 'important'); else b.style.removeProperty(k); }
+    }, 100);
     setV(E.up, sail && !B.dock); setV(E.down, sail && !B.dock); setV(E.left, F.sub === 'fish' || (sail && !B.dock)); setV(E.right, F.sub === 'fish' || (sail && !B.dock));
     setV(E.act, F.sub === 'fish'); setV(E.chart, boat && !B.dock); setV(E.anchor, boat && !B.dock && !(sail && B.docked));
     setH(E.act, prot ? '🔭' : '🎣'); setH(E.anchor, sail ? '⚓<small>내리기</small>' : '⚓<small>올리기</small>');
