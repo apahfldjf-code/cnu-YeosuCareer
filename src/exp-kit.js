@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 
 const lim = (v, a, b) => Math.max(a, Math.min(b, v));
+const GHOST = '#3fd8ff';   /* 목표 모형 색: 흰 바닥·회색 바닥·어두운 바닥에서 모두 보이는 하늘색 */
 export const snd = (c, n) => { try { if (c.sfx && typeof c.sfx[n] === 'function') c.sfx[n](); } catch (e) { /* 소리 실패는 무시 */ } };
 export const vib = (c, ms) => { try { if (typeof c.buzz === 'function') c.buzz(ms); } catch (e) { /* 무시 */ } };
 
@@ -77,10 +78,20 @@ export function assembler(c, cfg) {
     parent.updateWorldMatrix(true, true);
     const sz = new THREE.Box3().setFromObject(g).getSize(new THREE.Vector3());
     const size = Math.max(sz.x, sz.z, sz.y * 0.7, 0.8);
-    const gm = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.3, depthWrite: false });
-    const gh = s.make(); gh.traverse((o) => { if (o.isMesh) { o.material = gm; o.castShadow = false; } });
+    const gm = new THREE.MeshBasicMaterial({ color: GHOST, transparent: true, opacity: 0.5, depthWrite: false });
+    const gh = s.make(), ms = [];
+    gh.traverse((o) => { if (o.isMesh) { o.material = gm; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 5; ms.push(o); } });
+    ms.forEach((o) => {   /* 바닥색과 상관없이 보이도록 흰 윤곽선 */
+      const ln = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthTest: false }));
+      ln.renderOrder = 6; o.add(ln);
+    });
     gh.position.set(s.slot[0], s.slot[1], s.slot[2]); parent.add(gh);
-    slots.push({ kind: s.kind, x: s.slot[0], y: s.slot[1], z: s.slot[2], r: s.r || 1.6, gh, mat: gm, near: false, taken: false });
+    parent.updateWorldMatrix(true, true);
+    const topY = new THREE.Box3().setFromObject(gh).max.y; V.set(0, topY, 0); parent.worldToLocal(V);
+    const ak = lim(size * 0.3, 0.7, 1.5);   /* 목표 위치를 알려 주는 노란 화살표 */
+    const ar = new THREE.Mesh(new THREE.ConeGeometry(0.3 * ak, 0.7 * ak, 14), new THREE.MeshBasicMaterial({ color: '#ffe14d', transparent: true, opacity: 0.95, depthTest: false }));
+    ar.rotation.x = Math.PI; ar.position.set(s.slot[0], V.y + 0.55 * ak, s.slot[2]); ar.renderOrder = 7; parent.add(ar);
+    slots.push({ kind: s.kind, x: s.slot[0], y: s.slot[1], z: s.slot[2], r: s.r || 1.6, gh, mat: gm, ar, ay: ar.position.y, near: false, taken: false });
     items.push({ i, s, kind: s.kind, g, slot: -1, size });
   });
 
@@ -91,7 +102,7 @@ export function assembler(c, cfg) {
 
   const paint = (s, on) => {
     if (s.near === on) return; s.near = on;
-    s.mat.color.set(on ? '#7CFC9A' : '#ffffff'); s.mat.opacity = on ? 0.6 : 0.3; s.gh.scale.setScalar(on ? 1.05 : 1);
+    s.mat.color.set(on ? '#7CFC9A' : GHOST); s.mat.opacity = on ? 0.75 : 0.5; s.gh.scale.setScalar(on ? 1.05 : 1);
   };
 
   /* 화면의 한 점(nx, ny)에 부품을 놓아요. 높이는 가장 가까운 같은 종류 슬롯의 높이 */
@@ -107,14 +118,14 @@ export function assembler(c, cfg) {
 
   const panel = () => {
     const rows = items.map((q) => `${q.slot >= 0 ? '✅' : (q.s.opt ? '➕' : '⬜')} ${q.s.name}${q.s.opt ? ' <small>(선택)</small>' : ''}`).join('<br>');
-    ui.panel(`<b>${cfg.title || '🔧 부품'}</b><br>${rows}<br><small>${cfg.note || '부품을 끌어 흰 그림자 위에 놓아요 (초록으로 켜지면 붙어요)'}</small>`);
+    ui.panel(`<b>${cfg.title || '🔧 부품'}</b><br>${rows}<br><small>${cfg.note || '부품을 끌어 하늘색 윤곽 위에 놓아요 (초록으로 켜지면 붙어요)'}</small>`);
   };
 
   return {
     items, slots, panel, complete,
     get miss() { return miss; },
     lock(v) { locked = v; },
-    pulse(t) { slots.forEach((s) => { if (s.taken) return; s.mat.opacity = s.near ? 0.55 + 0.15 * Math.sin(t * 9) : 0.22 + 0.18 * Math.sin(t * 4); }); },
+    pulse(t) { slots.forEach((s) => { if (s.taken) return; s.mat.opacity = s.near ? 0.72 + 0.12 * Math.sin(t * 9) : 0.44 + 0.14 * Math.sin(t * 4); if (s.ar) s.ar.position.y = s.ay + Math.sin(t * 5) * 0.15; }); },
     down() {
       if (locked) return;
       const free = items.filter((q) => q.slot < 0); if (!free.length) return;
@@ -148,7 +159,7 @@ export function assembler(c, cfg) {
       });
       const wpos = (x, y, z) => parent.localToWorld(new THREE.Vector3(x, y, z));
       if (best >= 0) {
-        const s = slots[best]; s.taken = true; s.gh.visible = false; q.slot = best; q.g.position.set(s.x, s.y, s.z);
+        const s = slots[best]; s.taken = true; s.gh.visible = false; if (s.ar) s.ar.visible = false; q.slot = best; q.g.position.set(s.x, s.y, s.z);
         snd(c, 'ok'); vib(c, 25); ui.pop('✔ 장착!', wpos(s.x, s.y + 1, s.z), '#7CFC9A'); panel();
         if (!fired && complete()) { fired = true; if (cfg.onComplete) cfg.onComplete(); }
       } else {
