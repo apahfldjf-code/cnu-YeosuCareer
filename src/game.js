@@ -55,6 +55,9 @@ import { initNpcs, tickNpcs } from './npc.js';
 import { initPost, renderFx } from './post.js';
 import { initDetail, tickDetail } from './detail.js';
 import { Kart, KartFx, RaceRun, buildCircuit } from './race.js';
+import { buildArena } from './fps-arena.js';
+import { createFpsUI } from './fps-ui.js';
+
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -72,7 +75,9 @@ let mode = 'title', view = 'tps', ads = false, invOpen = false, hp = HPMAX, race
 const inv = new Inventory(), reload = { t: 0, e: null, d: null }, loot = [], tracers = [], bursts = [];
 const bolts = [], BOLT_GEO = new THREE.SphereGeometry(0.13, 8, 6), BOLT_MAT = new THREE.MeshBasicMaterial({ color: '#7fe3ff' });
 let bloom = 0;
-let vm = null, vmK = 0;
+let vm = null, vmK = 0, mfT = 0;
+const MF = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffd98a', transparent: true, opacity: 0.95, depthTest: false, fog: false }));
+MF.position.set(0.25, -0.2, -1.05); MF.visible = false; MF.renderOrder = 999;
 let exp = null;
 const ptr = { locked: false, fail: isTouch ? 3 : 0, skip: false, down: [false, false, false] };
 const cam = { yaw: Math.PI, pitch: 0.45, aim: 0, dist: 9, lastDrag: 0 };
@@ -128,18 +133,29 @@ const hx = el('div'); hx.id = 'hudx'; hx.style.display = 'none';
 hx.innerHTML = '<div id="wtag"></div><div id="cross"></div><div id="hitm"></div><div id="hpbox"><div id="hpfill"></div><span id="hptxt"></span></div><div id="ammobox"></div><div id="bar"></div><div id="lockhint">🖱 화면을 클릭하면 마우스가 고정돼요 · Esc: 해제(메뉴)</div><div id="flash"></div>';
 document.body.append(hx);
 const ui = { cross: $('#cross'), hint: $('#lockhint'), hit: $('#hitm'), flash: $('#flash'), wtag: $('#wtag') };
+const FUI = createFpsUI({
+  isTouch,
+  onSlot: (k) => { if (mode !== 'play') return; const d = barDefs().find((x) => x.k === k); if (d) { sfx.click(); d.f(); } },
+  onGear: () => { if (mode === 'play') openInventory(); },
+  onFire: (on) => { if (mode !== 'play' || race || kart.active) { ptr.down[0] = false; return; } ptr.down[0] = on; if (on) primary(); },
+});
+
 
 /* ───────────── 3D 기본 설정 ───────────── */
 const renderer = new THREE.WebGLRenderer({ canvas: $('#gl'), antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.08;
-const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900); scene.add(camera);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(60, 1, 0.1, 900); scene.add(camera); camera.add(MF);
 const WR = buildWorlds(scene), WS = WR.worlds; let cur = WS.campus; WR.sun.castShadow = S.settings.shadow;
 try {
   const rc = buildCircuit(scene);
   if (rc) { scene.remove(WS.race.root); WS.race = rc; if (S.circuit !== 2) { S.circuit = 2; S.bestLap = null; S.bestRace = null; save(S); } }
 } catch (e) { console.warn('[race] 새 서킷 실패 → 기존 원형 서킷 사용', e); }
 
+try {
+  const fa = buildArena(scene, WS.fps);
+  if (fa) { scene.remove(WS.fps.root); WS.fps = fa; }
+} catch (e) { console.warn('[fps] 새 훈련장 실패 → 기존 지형 사용', e); }
 if (!QUALITIES[S.settings.q] || S.settings.qv !== 3) { S.settings.q = 'high'; S.settings.qv = 3; }
 initDisplay(renderer, scene);
 initPost(renderer, scene, camera);
@@ -220,7 +236,13 @@ cvs.addEventListener('mousedown', (e) => {
 });
 addEventListener('mouseup', (e) => { if (e.button === 0) ptr.down[0] = false; if (e.button === 2) { ptr.down[2] = false; ads = false; } });
 cvs.addEventListener('mousemove', (e) => { if (mode === 'play' && ptr.locked) look(e.movementX, e.movementY); });
-cvs.addEventListener('wheel', (e) => { cam.dist = clamp(cam.dist + e.deltaY * 0.01, 4, 18); });
+cvs.addEventListener('wheel', (e) => {
+  if (cur.id === 'fps' && mode === 'play' && !kart.active) {
+    const o = ['main', 'sub', 'fist'].filter((s) => s === 'fist' || inv.equip[s]), i = o.indexOf(inv.active);
+    setActive(o[(i + (e.deltaY > 0 ? 1 : o.length - 1)) % o.length]); return;
+  }
+  cam.dist = clamp(cam.dist + e.deltaY * 0.01, 4, 18);
+});
 function look(dx, dy) {
   const s = 0.0026 * (S.settings.sens || 1) * (ads ? 0.6 : 1); cam.yaw -= dx * s; cam.lastDrag = performance.now();
   if (view === 'fps' && cur.id === 'fps' && !kart.active) cam.aim = clamp(cam.aim - dy * s, -1.35, 1.35); else cam.pitch = clamp(cam.pitch + dy * s, -0.22, 1.25);
@@ -235,6 +257,7 @@ function onKey(e) {
   else if (c === 'KeyR') { if (cur.id === 'fps') startReload(); else { balls().forEach((b) => b.reset()); toast('공을 제자리로 돌려놨어요.'); } }
   else if (c === 'Tab') { if (cur.id === 'fps') openInventory(); else showReport(); }
   else if (c === 'KeyI') openInventory();
+  else if (c === 'KeyQ' && cur.id === 'fps') useHeal();
   else if (c === 'KeyM') $('#hud-right').classList.toggle('big');
   else if (c === 'KeyV' && cur.id === 'fps') { view = view === 'fps' ? 'tps' : 'fps'; cam.pitch = 0.35; cam.aim = 0; toast(view === 'fps' ? '👁 1인칭' : '🎥 3인칭'); }
   else if (/^Digit[1-6]$/.test(c)) { const d = barDefs().find((x) => x.k === +c.slice(5)); if (d) d.f(); }
@@ -347,7 +370,7 @@ function nearest() {
   if (kart.active) return { label: '[E] 🚪 카트에서 내리기', act: exitKart };
   const a = actor(); let best = null, bd = 1e9;
   for (const it of interactables) { if (it.hide && it.hide()) continue; const d = Math.hypot(a.x - it.x, a.z - it.z); if (d < it.r && d < bd) { bd = d; best = it; } }
-  if (cur.id === 'fps') for (const l of loot) { const d = Math.hypot(a.x - l.x, a.z - l.z); if (d < 2.4 && d < bd) { bd = d; best = { label: `[F] 줍기 · ${l.def.icon} ${l.def.name}`, act: () => pickup(l) }; } }
+  if (cur.id === 'fps') for (const l of loot) { const d = Math.hypot(a.x - l.x, a.z - l.z); if (d < 2.4 && d < bd) { bd = d; best = { label: `[F] ${wantLoot(l.def) ? '줍기' : '교체'} · ${l.def.icon} ${l.def.name}`, act: () => pickup(l, false) }; } }
   return best;
 }
 function interact() { const it = nearest(); if (it) { sfx.click(); it.act(); } }
@@ -370,7 +393,8 @@ function changeWorld(id, quiet) {
   view = id === 'fps' ? 'fps' : 'tps'; placePlayer();
   interactables = buildInteractables(); if (id === 'fps') { spawnLoot(); drones.forEach((d) => { d.respawn(); d.deadT = 0; }); }
   syncGear(); syncHeld(); updateHp(); hud(); ui.wtag.textContent = `${WORLDS[id].icon} ${WORLDS[id].name}`; FISH.onWorld(id);
-  if (!quiet) { sfx.portal(); toast(had ? '🎒 월드를 이동해서 가지고 있던 아이템이 모두 사라졌어요' : id === 'fps' ? '🎯 바닥의 무기·장비를 주우면 바로 착용돼요! (1·2번 무기 · 4번 회복)' : `${WORLDS[id].icon} ${WORLDS[id].name} 도착!`, 3600); }
+  FUI.show(id === 'fps'); FUI.reset(); zoneName = ''; syncFps();
+  if (!quiet) { sfx.portal(); toast(had ? '🎒 월드를 이동해서 가지고 있던 아이템이 모두 사라졌어요' : id === 'fps' ? '🎯 아이템 위로 걸어가면 자동으로 줍고 착용돼요! 아래 칸을 눌러 무기를 바꿔요' : `${WORLDS[id].icon} ${WORLDS[id].name} 도착!`, 3600); }
 }
 
 /* ───────────── 장비 동기화 ───────────── */
@@ -390,38 +414,85 @@ function setActive(s) {
 }
 
 /* ───────────── 바닥 아이템 ───────────── */
-function addLoot(id, x, z, stack) {
-  const def = ITEMS[id]; if (!def) return; const m = makeItemMesh(def); m.position.set(x, 0, z); WS.fps.root.add(m);
-  loot.push({ id, x, z, mesh: m, def, stack: stack || null, t: Math.random() * 6 });
+const BEAM_GEO = new THREE.CylinderGeometry(0.07, 0.07, 3.2, 8, 1, true);
+const BEAM_MAT = RAR.map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.38, depthWrite: false, side: THREE.DoubleSide }));
+function addLoot(id, x, z, stack, cool) {                       // cool: 자동 줍기를 쉬는 시간(초). 1e9 = 직접 눌러야 줍기
+  const def = ITEMS[id]; if (!def) return; const m = makeItemMesh(def); m.position.set(x, 0, z);
+  const beam = new THREE.Mesh(BEAM_GEO, BEAM_MAT[clamp((def.rarity || 1) - 1, 0, 3)]); beam.position.y = 1.6; m.add(beam);   // 등급색 빛기둥
+  WS.fps.root.add(m);
+  loot.push({ id, x, z, mesh: m, def, stack: stack || null, t: Math.random() * 6, cool: cool || 0 });
 }
 function clearLoot() { loot.splice(0).forEach((l) => l.mesh.parent && l.mesh.parent.remove(l.mesh)); }
 function spawnLoot() { WS.fps.lootSpots.forEach((s) => addLoot(pickW(LOOT[s.tier || 1]), s.x, s.z)); }
-function autoEquip(id) {
+function autoEquip(id, force) {
   const d = ITEMS[id]; if (!d || !['weapon', 'helmet', 'vest', 'pack'].includes(d.type)) return '';
   let i = -1; for (let k = inv.bag.length - 1; k >= 0; k--) if (inv.bag[k].id === id) { i = k; break; }
   if (i < 0) return '';
   if (d.type === 'weapon') {
     if (inv.equip.main && inv.equip.sub) return '';
     const had = !!(inv.equip.main || inv.equip.sub), s = inv.wear(i); if (!s) return '';
-    if (s === 'main' || s === 'sub') { if (!had || inv.active === 'fist') inv.active = s; }
+    if (s === 'main' || s === 'sub') { if (!had || inv.active === 'fist' || force) inv.active = s; }
     return `${SLOT_NAME[s]} 장착`;
   }
   const o = inv.equip[d.type];
   if (o) { const od = ITEMS[o.id], better = d.type === 'pack' ? (d.slots || 0) > (od.slots || 0) : (d.reduce || 0) > (od.reduce || 0); if (!better) return ''; }
   const s = inv.wear(i); return s ? `${SLOT_NAME[s] || SLOT_NAME[d.type]} 착용` : '';
 }
-function pickup(l) {
+/* 자동으로 주울 가치가 있나? (탄약·회복은 항상 / 무기는 빈 칸이 있거나 더 좋을 때 / 방어구는 더 좋을 때) */
+function wantLoot(d) {
+  if (d.type === 'ammo') return true;
+  if (d.type === 'heal') return inv.bag.length < inv.cap() || inv.bag.some((e) => e.id === d.id);
+  if (d.type === 'weapon') {
+    if (!inv.equip.main || !inv.equip.sub) return true;
+    return (d.rarity || 1) > Math.min(ITEMS[inv.equip.main.id].rarity || 1, ITEMS[inv.equip.sub.id].rarity || 1);
+  }
+  const o = inv.equip[d.type]; if (!o) return true;
+  const od = ITEMS[o.id]; return d.type === 'pack' ? (d.slots || 0) > (od.slots || 0) : (d.reduce || 0) > (od.reduce || 0);
+}
+/* 바꿀 무기 칸 고르기: 직접 줍기는 들고 있는 칸, 자동은 등급이 낮은 칸 */
+function swapSlot(manual) {
+  if (manual && (inv.active === 'main' || inv.active === 'sub')) return inv.active;
+  return ['main', 'sub'].sort((a, b) => (ITEMS[inv.equip[a].id].rarity || 1) - (ITEMS[inv.equip[b].id].rarity || 1))[0];
+}
+/* 착용 중인 장비를 벗어서 발 앞 바닥에 내려놓기 (내려놓은 건 직접 눌러야 다시 주워요) */
+function swapOut(slot) {
+  const e = inv.equip[slot]; if (!e) return true;
+  if (!inv.takeOff(slot)) return false;
+  for (let k = inv.bag.length - 1; k >= 0; k--) if (inv.bag[k].id === e.id) {
+    const st = inv.dropAt(k); if (st) addLoot(st.id, P.x + Math.sin(P.yaw) * 1.3, P.z + Math.cos(P.yaw) * 1.3, st, 1e9); break;
+  }
+  return true;
+}
+function pickup(l, auto) {
+  const d = l.def, gear = ['weapon', 'helmet', 'vest', 'pack'].includes(d.type); let swapped = false;
+  if (gear) {
+    const full = d.type === 'weapon' ? (inv.equip.main && inv.equip.sub) : inv.equip[d.type];
+    if (full) {
+      if (!swapOut(d.type === 'weapon' ? swapSlot(!auto) : d.type)) { if (!auto) toast('🎒 가방이 가득 차서 바꿀 수 없어요 (I 에서 버려 주세요)'); return false; }
+      swapped = true;
+    }
+  }
   const r = inv.add(l.id, l.stack ? l.stack.n : 1, l.stack ? l.stack.mag : undefined);
-  if (!r.ok) { toast('🎒 ' + (r.msg || '가방이 가득 찼어요')); return; }
+  if (!r.ok) { if (!auto) toast('🎒 ' + (r.msg || '가방이 가득 찼어요')); return false; }
   sfx.pickup(); l.mesh.parent.remove(l.mesh); loot.splice(loot.indexOf(l), 1);
-  const note = autoEquip(l.id); if (note) { sfx.equip(); syncGear(); syncHeld(); }
-  const heal = l.def.type === 'heal';
-  toast(`${l.def.icon} ${l.def.name} 획득!${note ? ' · ' + note : heal ? ' · 4번 칸으로 사용' : ['weapon', 'helmet', 'vest', 'pack'].includes(l.def.type) ? ' · 가방에 보관(I로 교체)' : ''}`); updateAmmo(); updateBar();
+  const note = autoEquip(l.id, swapped || !auto); if (note) { sfx.equip(); syncGear(); syncHeld(); }
+  const msg = `${d.icon} ${d.name}${note ? ' · ' + note : ''}`;
+  if (cur.id === 'fps') FUI.feed(msg, d.rarity || 1); else toast(msg);
+  updateAmmo(); updateBar(); return true;
 }
 function dropItem(i) {
   const st = inv.dropAt(i); if (!st) return;
-  if (cur.id === 'fps') addLoot(st.id, P.x + Math.sin(P.yaw) * 1.6, P.z + Math.cos(P.yaw) * 1.6, st); toast('아이템을 버렸어요');
+  if (cur.id === 'fps') addLoot(st.id, P.x + Math.sin(P.yaw) * 1.6, P.z + Math.cos(P.yaw) * 1.6, st, 1e9); toast('아이템을 버렸어요');
 }
+let pickCd = 0;
+function autoPick(dt) {                                            // 걸어가면 자동으로 줍기
+  pickCd -= dt; if (pickCd > 0 || kart.active) return;
+  for (const l of loot) {
+    if (l.cool > 0 || Math.hypot(P.x - l.x, P.z - l.z) > 1.7 || !wantLoot(l.def)) continue;
+    pickCd = pickup(l, true) ? 0.18 : 0.5; break;
+  }
+}
+
 function useHeal() {
   const i = inv.bag.findIndex((e) => ITEMS[e.id].type === 'heal');
   if (i < 0) { toast('🩹 회복 아이템이 없어요'); return; } if (hp >= HPMAX) { toast('체력이 이미 가득해요'); return; }
@@ -485,7 +556,7 @@ function meleeHit(a) {
 function damageDrone(d, dmg) {
   if (!d.alive) return; const dead = d.hit(dmg); hitmark(dead); sfx.hit();
   if (dead) {
-    d.deadT = 0; S.kills = (S.kills | 0) + 1; S.coins += 2; save(S); hud(); burst(d.x, 1.5, d.z); sfx.boom(); toast('🎯 훈련 드론 격파! 🪙+2');
+    d.deadT = 0; S.kills = (S.kills | 0) + 1; S.coins += 2; save(S); hud(); burst(d.x, 1.5, d.z); sfx.boom(); FUI.kill('🤖 훈련 드론 격파  🪙+2');
     if (Math.random() < 0.75) addLoot(pickW(LOOT.drop), d.x + rnd(-1, 1), d.z + rnd(-1, 1));
   }
 }
@@ -534,7 +605,7 @@ function fire(first) {
   const e = inv.weapon(); if (!e || reload.t > 0 || P.cd > 0 || mode !== 'play') return; const d = ITEMS[e.id];
   if (!d.auto && !first) return;
   if (e.mag <= 0) { if (first) sfx.empty(); startReload(); return; }
-  e.mag--; bloom = Math.min(1.6, bloom + (d.recoil || 1) * 0.06); P.cd = 1 / d.rate; vmK = 1; P.char.kick(); P.yaw = cam.yaw;
+  e.mag--; if (view === 'fps') { MF.visible = true; MF.scale.setScalar(0.8 + Math.random() * 0.8); mfT = 0.05; } bloom = Math.min(1.6, bloom + (d.recoil || 1) * 0.06); P.cd = 1 / d.rate; vmK = 1; P.char.kick(); P.yaw = cam.yaw;
   for (let i = 0; i < (d.pellets || 1); i++) shoot(d);
   sfx.shoot(d.fam); if (view === 'fps') { cam.aim = clamp(cam.aim + (d.recoil || 1) * 0.01, -1.35, 1.35); cam.yaw += rnd(-0.004, 0.004) * (d.recoil || 1); }
   updateAmmo(); if (e.mag <= 0 && (inv.ammo[d.ammo] | 0) > 0) setTimeout(() => { if (inv.weapon() === e) startReload(); }, 250);
@@ -548,9 +619,11 @@ function finishReload() {
   const e = reload.e, d = reload.d; if (e && inv.weapon() === e) { const take = Math.min(d.mag - e.mag, inv.ammo[d.ammo] | 0); e.mag += take; inv.ammo[d.ammo] -= take; }
   reload.e = null; updateAmmo();
 }
-function hurt(dmg) {
+function hurt(dmg, dir) {
   const a = inv.armor(), red = clamp((a.helmet ? a.helmet.reduce : 0) + (a.vest ? a.vest.reduce : 0), 0, 0.7);
-  hp -= dmg * (1 - red); sfx.hurt(); flash(); buzz(35); updateHp(); if (hp <= 0) { hp = 0; updateHp(); ko(); }
+  hp -= dmg * (1 - red); sfx.hurt(); flash(); buzz(35); updateHp();
+  if (dir) { let rel = Math.atan2(-dir.x, -dir.z) - cam.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel)); FUI.hurt(-rel); }
+  if (hp <= 0) { hp = 0; updateHp(); ko(); }
 }
 function ko() {
   let next = 'fps'; const box = el('div', '', '<h2>🤖 훈련 종료!</h2><p>훈련 드론의 신호를 많이 맞았어요. 아이템은 사라지지만 코인과 기록은 그대로예요.</p>');
@@ -582,7 +655,7 @@ function boltUpdate(dt) {
     if (rayWorld(a, b.dir, step) < step) dead = true;
     else if (!kart.active) {
       const ab = nx.clone().sub(a), tt = clamp(new THREE.Vector3(P.x, P.y + 0.9, P.z).sub(a).dot(ab) / (ab.lengthSq() || 1), 0, 1), q = a.clone().addScaledVector(ab, tt);
-      if (Math.hypot(q.x - P.x, q.z - P.z) < 0.5 && q.y > P.y && q.y < P.y + 1.85) { hurt(b.dmg * (q.y > P.y + 1.5 ? 1.5 : 1)); dead = true; }
+      if (Math.hypot(q.x - P.x, q.z - P.z) < 0.5 && q.y > P.y && q.y < P.y + 1.85) { hurt(b.dmg * (q.y > P.y + 1.5 ? 1.5 : 1), b.dir); dead = true; }
     }
     if (dead) { scene.remove(b.m); bolts.splice(i, 1); } else b.m.position.copy(nx);
   }
@@ -598,9 +671,37 @@ function combatUpdate(dt, t) {
       if (!dr.alive) { dr.deadT = (dr.deadT || 0) + dt; if (dr.deadT > 9) dr.respawn(); continue; }
       if (dr.update(dt, t, P.x, P.z)) enemyShot(dr);
     }
-    for (const l of loot) { l.mesh.rotation.y += dt * 1.5; l.mesh.position.y = 0.15 + Math.sin(l.t + t * 2) * 0.1; }
+    for (const l of loot) { l.mesh.rotation.y += dt * 1.5; l.mesh.position.y = 0.15 + Math.sin(l.t + t * 2) * 0.1; if (l.cool > 0) l.cool -= dt; }
+    autoPick(dt); syncFps();
   }
 }
+
+/* ───────────── FPS 전용 HUD 상태 전달 ───────────── */
+let zoneName = '';
+function syncFps() {
+  if (cur.id !== 'fps') return;
+  const a = inv.armor(), m = inv.equip.main, s = inv.equip.sub;
+  const wp = (e, k, slot) => {
+    if (!e) return { k, icon: '＋', name: k === 1 ? '주무기' : '보조무기', empty: true, val: '', sub: '' };
+    const d = ITEMS[e.id], rl = reload.t > 0 && reload.e === e;
+    return { k, icon: d.icon || '🔫', name: d.name, on: inv.active === slot, rar: d.rarity || 1, val: rl ? '…' : e.mag, sub: '/' + (inv.ammo[d.ammo] | 0), lo: !rl && e.mag <= Math.ceil(d.mag * 0.25) };
+  };
+  const nHeal = inv.bag.filter((e) => ITEMS[e.id].type === 'heal').reduce((n, e) => n + (e.n || 1), 0);
+  const w = inv.weapon(); let low = '';
+  if (w && inv.active !== 'fist' && w.mag <= 0 && reload.t <= 0) low = (inv.ammo[ITEMS[w.id].ammo] | 0) > 0 ? 'reload' : 'empty';
+  FUI.set({
+    hp, hpMax: HPMAX, kills: S.kills | 0, low,
+    reload: reload.t > 0 && reload.d ? 1 - reload.t / reload.d.reload : -1,
+    gear: { helmet: a.helmet ? Math.round(a.helmet.reduce * 100) + '%' : '', vest: a.vest ? Math.round(a.vest.reduce * 100) + '%' : '', pack: inv.equip.pack ? '+' + (ITEMS[inv.equip.pack.id].slots || 0) : '' },
+    slots: [wp(m, 1, 'main'), wp(s, 2, 'sub'),
+      { k: 3, icon: '👊', name: '맨손', on: inv.active === 'fist', val: '', sub: '' },
+      { k: 4, icon: '🩹', name: nHeal ? '회복' : '회복 없음', empty: !nHeal, val: nHeal ? '×' + nHeal : '', sub: '' }],
+  });
+  const z = (cur.zones || []).find((q) => Math.hypot(P.x - q.x, P.z - q.z) < q.r), zn = z ? z.name : '';
+  if (zn !== zoneName) { zoneName = zn; if (zn) FUI.zone(zn); }
+}
+window.__fps = () => ({ world: cur.id, loot: loot.length, dronesAlive: drones.filter((d) => d.alive).length, colliders: cur.colliders.length,
+  main: inv.equip.main && inv.equip.main.id, sub: inv.equip.sub && inv.equip.sub.id, active: inv.active, autoAim: AA.on, autoFire: AA.fire });
 
 /* ───────────── 부스 → 미니게임 → 결과 (기존 유지) ───────────── */
 function openBooth(b) {
@@ -726,6 +827,7 @@ function openMenu() {
   });
   btn('🗑 기록 초기화', () => { if (confirm('체험 기록과 코인을 모두 지울까요?')) { S = reset(true); WS.campus.booths.forEach((b) => b.setDone(false)); hud(); closeModal(); toast('기록을 초기화했어요.'); } });
   btn(`🎯 자동조준: ${AA.on ? 'ON' : 'OFF'}`, () => { AA.on = !AA.on; localStorage.setItem('cq_autoaim', AA.on ? '1' : '0'); closeModal(); toast(AA.on ? '🎯 자동조준 ON' : '자동조준 OFF'); });
+  btn(`🔫 조준 맞으면 자동사격: ${AA.fire ? 'ON' : 'OFF'}`, () => { AA.fire = !AA.fire; localStorage.setItem('cq_autofire', AA.fire ? '1' : '0'); closeModal(); toast(AA.fire ? '🔫 자동사격 ON' : '자동사격 OFF'); });
   btn('🏠 타이틀로', () => location.reload());
   openM(box);
 }
@@ -854,6 +956,7 @@ function update(dt, t) {
     raceUpdate(dt); updateCamera(dt);
     const tf = ads && heldDef() ? (heldDef().fam === 'SR' ? 26 : 42) : 60;
     if (Math.abs(camera.fov - tf) > 0.05) { camera.fov += (tf - camera.fov) * Math.min(1, 12 * dt); camera.updateProjectionMatrix(); }
+    if (mfT > 0 && (mfT -= dt) <= 0) MF.visible = false;
     if (vm) { vmK = Math.max(0, vmK - dt * 7); vm.position.set(ads ? 0.02 : 0.26, ads ? -0.2 : -0.24, -0.6 + vmK * 0.08); vm.rotation.x = vmK * 0.06; }
     const a = actor();
     (cur.coins || []).forEach((c) => { if (!c.got && Math.hypot(c.x - a.x, c.z - a.z) < 1.8) { c.got = true; c.mesh.visible = false; S.coins++; sfx.coin(); hud(); save(S); } });
@@ -926,7 +1029,7 @@ function frame() {
 frame();
 
 /* ═════ 모바일 자동조준(추적) — 총을 든 FPS 1인칭에서만 동작 ═════ */
-const AA = { on: localStorage.getItem('cq_autoaim') !== '0', tgt: null, scan: 0, last: performance.now(), lock: false };
+const AA = { on: localStorage.getItem('cq_autoaim') !== '0', fire: localStorage.getItem('cq_autofire') !== '0', tgt: null, scan: 0, last: performance.now(), lock: false };
 const AA_YAW = 1, AA_PITCH = 1;   // 화면이 목표 반대로 돌면 해당 값을 -1 로 바꿔요
 
 function aaLock(on) {
@@ -964,6 +1067,7 @@ function aaStep(dt) {
   cam.yaw += AA_YAW * clamp(ey * f, -0.12, 0.12);
   cam.aim = clamp(cam.aim + AA_PITCH * clamp(ep * f, -0.12, 0.12), -1.35, 1.35);
   aaLock(err < 0.05);
+  if (AA.fire && err < 0.045) { const wp = inv.weapon(); if (wp && wp.mag > 0 && reload.t <= 0 && P.cd <= 0) fire(true); }
 }
 (function aaLoop() {
   requestAnimationFrame(aaLoop);
