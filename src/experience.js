@@ -12,7 +12,7 @@
  *   3D 장면    : 작업 패널이 열리면 카메라 시야 중심을 남는 영역으로 자동 이동
  *   글자 크기  : 작게 / 보통 / 크게 3단계 (localStorage 'cq_fs' 에 저장)
  *  → exp-cul1~3.js 는 고치지 않아도 .cul 을 자동으로 같은 규칙에 맞춥니다.
- *
+ *   → [v3] 글자판 겹침 자동 정리(?dc=0 으로 끄기) · 체험 재질 보호(noDetail) · 60초 정체 시 '체험 마무리' 버튼
  * 체험 정의 형식은 이전과 같아요 (ui·ctx API 변경 없음)
  *   registerExperience('학과id', { icon, title, desc, tools, steps, env, build(c) { ...; return { start, update, idle, down, move, up, key, dispose }; } });
  * ═══════════════════════════════════════════════════════════════ */
@@ -68,6 +68,7 @@ const CSS = `
 #xp .fl.on{animation:xfl .3s}
 @keyframes xfl{0%{opacity:.9}100%{opacity:0}}
 
+#xp .skip{pointer-events:auto;position:absolute;left:calc(50% - var(--rw,0px)/2);top:calc(64px + env(safe-area-inset-top,0px));transform:translateX(-50%);min-height:44px;padding:0 18px;border:2px solid #fff;border-radius:22px;background:#e8a92b;color:#10223f;font-weight:800;font-size:calc(14px*var(--xs,1));font-family:inherit;box-shadow:0 4px 14px rgba(0,0,0,.5);white-space:nowrap}
 /* 낮은 화면(가로 폰) */
 @media (max-height:520px){
   #xp .chip{font-size:calc(13px*var(--xs,1));padding:5px 10px}
@@ -77,7 +78,8 @@ const CSS = `
 }
 
 /* 문화사회 작업 패널(.cul) — exp-cul1.js 의 스타일을 같은 영역 규칙으로 덮어써요 */
-html body .cul{position:fixed!important;left:auto!important;right:calc(8px + env(safe-area-inset-right,0px))!important;top:calc(60px + env(safe-area-inset-top,0px))!important;bottom:auto!important;transform:none!important;width:min(44vw,480px)!important;height:auto!important;max-height:calc(100vh - 72px)!important;overflow-y:auto!important;z-index:40!important;font-size:calc(15px*var(--xs,1))!important;touch-action:pan-yb.style.width;-webkit-overflow-scrolling:touch}
+html body .cul{position:fixed!important;left:auto!important;right:calc(8px + env(safe-area-inset-right,0px))!important;top:calc(60px + env(safe-area-inset-top,0px))!important;bottom:auto!important;transform:none!important;width:min(44vw,480px)!important;height:auto!important;max-height:calc(100vh - 72px)!important;overflow-y:auto!important;z-index:40!important;font-size:calc(15px*var(--xs,1))!important;touch-action:pan-y;
+-webkit-overflow-scrolling:touch}
 html body .cul button{font-size:inherit!important;min-height:44px}
 html body .cul .big{font-size:calc(22px*var(--xs,1))!important}
 @media (max-height:520px){
@@ -100,6 +102,9 @@ export function startExperience(id, host) {
 
   let state = 'intro', alive = true, run = {};
   const avatars = [], keys = new Set();
+  let quiet = 0, skipEl = null, timeLeft = null, timeZero = 0;   /* 정체 감시 */
+  const progress = () => { quiet = 0; if (skipEl && timeZero < 6) { skipEl.remove(); skipEl = null; } };
+
 
   /* ───── 화면 UI ───── */
   const xp = document.createElement('div'); xp.id = 'xp';
@@ -169,6 +174,64 @@ export function startExperience(id, host) {
     },
   };
 
+  /* 정체 감시: 안내·패널·점수가 바뀌거나 팝업·버튼이 생기면 '진행 중'으로 봐요 */
+  const seenArg = {};
+  ['hint', 'panel', 'score'].forEach((n) => { const f = ui[n]; ui[n] = (a) => { if (seenArg[n] !== a) { seenArg[n] = a; progress(); } return f.call(ui, a); }; });
+  ['pop', 'banner', 'ask', 'button'].forEach((n) => { const f = ui[n]; ui[n] = (...a) => { progress(); return f.apply(ui, a); }; });
+  { const f = ui.timer; ui.timer = (s) => { timeLeft = s; return f.call(ui, s); }; }
+  /* ───── [v3] 글자판 겹침 정리 · 체험 재질 보호 · 정체 감시 ───── */
+  const DC_ON = new URLSearchParams(location.search).get('dc') !== '0';   /* ?dc=0 이면 겹침 정리 끄기 */
+  let swT = 0, dcT = 0;
+  const _dv = new THREE.Vector3();
+  const onAny = () => { if (alive) quiet = 0; };
+
+  /* 체험 장면의 재질에 표시를 달아 detail.js 의 거친 질감이 입혀지지 않게 해요 (새로 생긴 재질도 1초마다) */
+  const sweep = (dt) => {
+    swT -= dt; if (swT > 0) return; swT = 1;
+    root.traverse((o) => { if (!o.material) return; [].concat(o.material).forEach((m) => { if (m && m.userData) m.userData.noDetail = true; }); });
+  };
+  const sweepNow = () => { swT = 0; sweep(0); addEventListener('pointerdown', onAny, true); addEventListener('keydown', onAny, true); };
+
+  /* 글자 스프라이트끼리 겹치면 아래쪽을 고정하고 위쪽을 위로 비켜 줘요 (sprite.center 만 바꿔서 위치 코드와 충돌 없음) */
+  const declutter = (dt) => {
+    if (!DC_ON) return; dcT -= dt; if (dcT > 0) return; dcT = 0.25;
+    camera.updateMatrixWorld(true);
+    const fh = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), list = [];
+    root.traverseVisible((o) => {
+      if (!o.isSprite || !o.material || !o.material.map) return;
+      if (o.userData.dcBase === undefined) o.userData.dcBase = o.center.y;
+      o.center.y = o.userData.dcBase;
+      o.getWorldPosition(_dv); const d = camera.position.distanceTo(_dv); if (d < 0.1) return;
+      const ppu = innerHeight / (fh * d), w = o.scale.x * ppu, hh = o.scale.y * ppu; if (hh < 24) return;
+      _dv.project(camera); if (_dv.z > 1) return;
+      const cx = (_dv.x * 0.5 + 0.5) * innerWidth, cy = (-_dv.y * 0.5 + 0.5) * innerHeight;
+      list.push({ o, x0: cx - w / 2, x1: cx + w / 2, y0: cy - hh / 2, y1: cy + hh / 2, h: hh, sh: 0 });
+    });
+    list.sort((a, b) => b.y1 - a.y1);
+    const placed = [];
+    list.forEach((r) => {
+      for (let n = 0; n < 8; n++) {
+        const hit = placed.find((p) => Math.min(r.x1, p.x1) - Math.max(r.x0, p.x0) > 8 && Math.min(r.y1, p.y1) - Math.max(r.y0, p.y0) > 6);
+        if (!hit) break;
+        const dy = r.y1 - (hit.y0 - 3); r.y0 -= dy; r.y1 -= dy; r.sh += dy;
+        if (r.sh > r.h * 4) { r.y0 += r.sh; r.y1 += r.sh; r.sh = 0; break; }
+      }
+      placed.push(r);
+      if (r.sh > 0) r.o.center.y = r.o.userData.dcBase - r.sh / r.h;
+    });
+  };
+
+  /* 정체 감시: 60초 동안 아무 변화·입력이 없거나, 제한 시간이 0인데 6초 넘게 안 끝나면 '체험 마무리' 버튼 */
+  const watch = (dt) => {
+    if (state !== 'run') { quiet = 0; return; }
+    if (ptr.down || keys.size) quiet = 0; else quiet += dt;
+    if (timeLeft != null && timeLeft <= 0) timeZero += dt; else timeZero = 0;
+    if (skipEl || (quiet < 60 && timeZero < 6)) return;
+    skipEl = document.createElement('button'); skipEl.className = 'skip'; skipEl.textContent = '⏭ 막혔나요? 체험 마무리하기';
+    skipEl.onclick = () => { const e = skipEl; skipEl = null; if (e) e.remove(); finish(60); };
+    xp.append(skipEl);
+  };
+
   /* ───── 카메라 ───── */
   const cp = new THREE.Vector3(), cl = new THREE.Vector3(), tp = new THREE.Vector3(), tl = new THREE.Vector3(); let tfov = 55;
   const cam = {
@@ -180,9 +243,22 @@ export function startExperience(id, host) {
 
   /* ───── 화면 영역: 작업 패널(.cul)을 피해 3D 시야 중심 이동 ───── */
   let ox = 0, oy = 0, tox = 0, toy = 0, lay = 0, vkey = '', lastRw = -1, lastBh = -1;
+  /* .cul 말고도 오른쪽을 크게 덮는 고정 패널(수산 체험의 도크 등)을 찾아서 화면 중심 이동에 반영 */
+  const KNOWN = /(^|\s)(bar|panel|hint|card|fl|xbtn|pop|banner|skip)(\s|$)/;
+  const docks = () => {
+    const out = [...document.querySelectorAll('.cul')];
+    [...document.body.children, ...xp.children].forEach((el) => {
+      if (el === xp || ['CANVAS', 'SCRIPT', 'STYLE'].includes(el.tagName) || out.includes(el) || KNOWN.test(String(el.className || ''))) return;
+      const cs = getComputedStyle(el); if (cs.position !== 'fixed' && cs.position !== 'absolute') return;
+      if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < 0.1) return;
+      const r = el.getBoundingClientRect();
+      if (r.width >= innerWidth * 0.22 && r.width <= innerWidth * 0.6 && r.height >= innerHeight * 0.35 && r.left >= innerWidth * 0.4 && r.right >= innerWidth - 40) out.push(el);
+    });
+    return out;
+  };
   const scan = () => {
     let rw = 0, bh = 0;
-    document.querySelectorAll('.cul').forEach((el) => {
+    docks().forEach((el) => {
       const cs = getComputedStyle(el); if (cs.display === 'none' || cs.visibility === 'hidden') return;
       const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return;
       if (r.width > innerWidth * 0.85) bh = Math.max(bh, innerHeight - r.top); else rw = Math.max(rw, innerWidth - r.left);
@@ -251,6 +327,10 @@ export function startExperience(id, host) {
     document.querySelectorAll('.cul').forEach((el) => el.remove());   /* 남은 작업 패널 정리 */
     document.documentElement.style.removeProperty('--xs');
     camera.clearViewOffset();
+    document.body.classList.remove('in-exp');
+    window.dispatchEvent(new CustomEvent('cq-exp', { detail: { on: false } }));
+    removeEventListener('pointerdown', onAny, true); removeEventListener('keydown', onAny, true);
+    if (skipEl) { skipEl.remove(); skipEl = null; }
     xp.remove(); scene.remove(root);
     root.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) [].concat(o.material).forEach((m) => { if (m.map) m.map.dispose(); m.dispose(); }); });
   }
@@ -261,6 +341,8 @@ export function startExperience(id, host) {
   const go = document.createElement('button'); go.className = 'cbtn'; go.textContent = '▶ 시작하기'; go.onclick = start; card.append(go); xp.append(card);
 
   try { run = def.build(ctx) || {}; } catch (err) { dispose(); throw err; }
+  sweepNow(); document.body.classList.add('in-exp');
+  window.dispatchEvent(new CustomEvent('cq-exp', { detail: { on: true } }));   /* post.js 등이 체험 중임을 알 수 있어요 */
 
   return {
     update(dt, t) {
@@ -270,6 +352,7 @@ export function startExperience(id, host) {
       applyView(dt);
       avatars.forEach((a) => a.tick(dt));
       if (state === 'run' && run.update) run.update(dt, t); else if (run.idle) run.idle(dt, t);
+      sweep(dt); declutter(dt); watch(dt);
     },
     dispose,
   };
