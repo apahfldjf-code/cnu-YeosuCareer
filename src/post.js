@@ -100,6 +100,8 @@ function sync(force) {
 /* ───────── 환경광(간접광·반사) — gfx.js 가 있으면 건너뜀 ───────── */
 let pm = null, envTex = null, envKey = -1, lastScan = 0;
 const mats = new WeakSet();
+/* 체험이 시작되면 환경광 세기를 바로 맞추도록, 다음 프레임에 즉시 훑게 해요 */
+window.addEventListener('cq-exp', () => { lastScan = 0; });
 function buildEnv(hex) {
   const c = new THREE.Color(hex), W = new THREE.Color(1, 1, 1);
   const mat = new THREE.ShaderMaterial({
@@ -120,11 +122,12 @@ function envTick(now) {
       const hx = bg.getHex();
       if (hx !== envKey) { envKey = hx; const old = envTex; envTex = buildEnv(hx); SC.environment = envTex; if (old) old.dispose(); }
     }
-    if (now - lastScan > 2000) {
+    const inExp = document.body.classList.contains('in-exp');
+    if (now - lastScan > (inExp ? 300 : 2000)) {
       lastScan = now;
       SC.traverse((o) => {
         const m = o.material; if (!m) return;
-        (Array.isArray(m) ? m : [m]).forEach((x) => { if (x && x.isMeshStandardMaterial && !mats.has(x)) { mats.add(x); x.envMapIntensity = ENV_K; } });
+        (Array.isArray(m) ? m : [m]).forEach((x) => { if (x && x.isMeshStandardMaterial && !mats.has(x)) { mats.add(x); x.envMapIntensity = inExp ? ENV_K * 0.3 : ENV_K; } });
       });
     }
   } catch (e) { console.warn('[post] 환경광 건너뜀:', e && e.message); }
@@ -150,7 +153,12 @@ export function renderFx(renderer, scene, camera, q) {
   if (!S.ready || S.failed || lv <= 0) { renderer.render(scene, camera); return; }
   try {
     if (S.gtao) S.gtao.enabled = lv >= 2;
-    if (S.bloom) S.bloom.enabled = lv >= 1;
+    if (S.bloom) {
+      S.bloom.enabled = lv >= 1;
+      const ex = document.body.classList.contains('in-exp');   /* 체험 중에는 번짐을 거의 끔 */
+      S.bloom.strength = ex ? 0.04 : 0.32;
+      S.bloom.threshold = ex ? 1.5 : 0.92;
+    }
     sync(false);
     S.composer.render(dt);
   } catch (e) {
