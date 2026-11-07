@@ -57,7 +57,7 @@ import { initDetail, tickDetail } from './detail.js';
 import { Kart, KartFx, RaceRun, buildCircuit } from './race.js';
 import { buildArena } from './fps-arena.js';
 import { createFpsUI } from './fps-ui.js';
-
+import './speech-fix.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
