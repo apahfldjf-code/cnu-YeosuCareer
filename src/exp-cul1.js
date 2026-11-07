@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { registerExperience, clamp, shuffle } from './experience.js';
 import { duck } from './audio.js';
+import { pickListen, pickSpeak } from './lang-bank.js';
 
 /* ───────────────────────── 공용 도구 ───────────────────────── */
 const FONT = '"Malgun Gothic","Yu Gothic","Microsoft YaHei","Noto Sans CJK KR",sans-serif';
@@ -71,6 +72,7 @@ const CUL_CSS = `
 .cul .bar{height:10px;border-radius:5px;background:rgba(255,255,255,.15);overflow:hidden;margin:2px 0 6px}
 .cul .bar i{display:block;height:100%;background:linear-gradient(90deg,#3fd17a,#8be36a)}
 .cul small{opacity:.85}
+.cul .stk{position:sticky;bottom:0;margin:8px -12px -10px;padding:8px 12px 10px;background:linear-gradient(rgba(17,24,39,0),rgba(17,24,39,.97) 35%);z-index:2}
 .cul .big{font-size:22px;font-weight:800;margin:4px 0}
 .cul .mic{background:#c0453d;font-weight:700}
 .cul .mic.on{background:#e8473d;animation:culp 1s infinite}
@@ -105,7 +107,8 @@ function showScript(lines) {
 export const speech = {
   sttDead: false, cur: null,
   canListen() { return !!SRC && !this.sttDead; },
-  hasVoice(lang) {
+  hasVoice() { return !!SYN; },   /* 목록이 비거나 불완전해도 일단 재생을 시도해요. 안 나오면 3.5초 뒤 대본이 떠요 */
+  hasLangVoice(lang) {
     if (!SYN) return false; const vs = SYN.getVoices(); if (!vs.length) return true;
     const p = lc(lang).slice(0, 2); return vs.some((v) => lc(v.lang).startsWith(p));
   },
@@ -118,10 +121,17 @@ export const speech = {
         if (tk !== this._tk) return;
         const vs = SYN.getVoices(), p = lc(lang).slice(0, 2);
         const v = vs.find((x) => lc(x.lang) === lc(lang)) || vs.find((x) => lc(x.lang).startsWith(p));
-        arr.forEach((t, i) => { const u = new SpeechSynthesisUtterance(t); u.lang = lang; if (v) u.voice = v; u.rate = o.rate || 0.88; u.pitch = i % 2 ? 0.8 : 1.1; u.volume = 1; u.onstart = () => { started = true; }; SYN.speak(u); });
+        arr.forEach((t, i) => {
+          const u = new SpeechSynthesisUtterance(t);
+          u.lang = lang; if (v) u.voice = v; u.rate = o.rate || 0.88; u.pitch = i % 2 ? 0.8 : 1.1; u.volume = 1;
+          u.onstart = () => { started = true; };
+          u.onend = u.onerror = () => { const k = (this._keep || []).indexOf(u); if (k >= 0) this._keep.splice(k, 1); };
+          (this._keep = this._keep || []).push(u);
+          SYN.speak(u);
+        });
       }, 120);
       duck(2 + arr.join('').length * 0.18);
-      setTimeout(() => { if (tk === this._tk && !started) showScript(arr); }, 3000);
+      setTimeout(() => { if (tk === this._tk && !started && !(SYN.speaking || SYN.pending)) showScript(arr); }, 3500);
       return true;
     } catch (e) { return false; }
   },
@@ -213,6 +223,7 @@ function langTest(id, L) {
             bt.classList.add(ok ? 'ok' : 'no'); btns[o.a].classList.add('ok'); if (ok) c.sfx.ok(); else c.sfx.bump();
             fb.textContent = `${ok ? '⭕ 정답!' : '❌ 아쉬워요'} ${o.why || ''}`;
             const nx = h('button', 'pri', o.nextLabel || '다음 ▶', row); nx.onclick = () => { if (live()) o.next(ok); };
+            row.classList.add('stk'); b.scrollTo({ top: b.scrollHeight, behavior: 'smooth' });
           };
         });
       }
@@ -227,11 +238,16 @@ function langTest(id, L) {
         ov.clear(); const b = ov.el;
         h('h3', '', `${SEC[si].ic} ${SEC[si].name} 결과`, b); h('div', 'big', `${pct}점`, b);
         h('div', 'fb', sc.map((s, i) => `문제 ${i + 1}: ${s >= 0.99 ? '⭕' : s > 0.4 ? '🔺' : '❌'} ${Math.round(s * 100)}점`).join('\n'), b);
-        const row = h('div', 'row', '', b), a = h('button', 'pri', '← 부스 선택으로', row); a.onclick = menu;
+        const row = h('div', 'row stk', '', b), a = h('button', 'pri', '← 부스 선택으로', row); a.onclick = menu;
       }
 
       /* ── 1) 듣기 ── */
-      const listenSec = () => seq(0, L.listen.map(mix), (q, k, n, next) => {
+      const bankKey = L.lang.slice(0, 2);
+      const listenSet = () => {
+        const extra = pickListen(bankKey, 8).map((b) => ({ lines: [b.say], q: b.q, opts: b.opts, a: b.ans, tr: b.ko }));
+        return shuffle([...L.listen, ...extra]).slice(0, 4).map(mix);
+      };
+      const listenSec = () => seq(0, listenSet(), (q, k, n, next) => {
         let plays = 0, btnPlay = null; const voice = sp.hasVoice(L.lang);
         const play = () => { if (plays >= 3) { ui.pop('최대 3번까지 들을 수 있어요', null, '#ffe9a0'); return; } plays++; speakOut(q.lines, 0, 0.85); if (btnPlay) btnPlay.textContent = `🔊 다시 듣기 (${plays}/3)`; };
         choose({
@@ -251,7 +267,7 @@ function langTest(id, L) {
         const pron = () => (best == null ? null : clamp((best - 0.3) / 0.5, 0, 1));
         const fin = (p) => next(p == null ? choice : 0.6 * choice + 0.4 * p);
         h('div', 'hd', '🎤 2단계 · 직접 말해 보기', b); h('div', 'q', `${tgt}\n<small>${q.mean}</small>`, b);
-        const fb = h('div', 'fb', '', b), row = h('div', 'row', '', b);
+        const fb = h('div', 'fb', '', b), row = h('div', 'row stk', '', b);
         const hearB = h('button', '', '🔊 먼저 들어 보기', row); hearB.onclick = () => speakOut(tgt, 1, 0.8);
         const more = () => { if (nx) return; nx = h('button', 'pri', '다음 ▶', row); nx.onclick = () => fin(pron()); };
         const manual = () => { const m = h('button', 'pri', '✔ 소리 내어 읽었어요', row); m.onclick = () => fin(null); };
@@ -271,7 +287,8 @@ function langTest(id, L) {
         } else manual();
         const sk = h('button', '', '건너뛰기', row); sk.onclick = () => fin(null);
       }
-      const speakSec = () => seq(1, L.speak.map(mix), (q, k, n, next) => {
+      const speakSec = () => seq(1, [...L.speak.map(mix), ...pickSpeak(bankKey, 2).map((s) => ({ rep: true, line: s.say, ko: s.ko }))], (q, k, n, next) => {
+        if (q.rep) { bub.visible = true; bub.userData.set(wrapTxt(q.line, L.wrapN), '#1b2a41', '#ffffff'); pronView({ mean: q.ko }, q.line, 1, next); return; }
         const tgt = q.opts[q.a];
         const hear = () => { bub.visible = true; bub.userData.set(wrapTxt(q.line, L.wrapN), '#1b2a41', '#ffffff'); if (!speakOut(q.line, 1, 0.85)) ui.pop('음성이 없어 글자로 확인해요', null, '#ffe9a0'); };
         choose({
@@ -298,7 +315,7 @@ function langTest(id, L) {
         h('h3', '', `${L.icon} ${L.short} 회화 테스트 · 부스를 골라 도전해요`, ov.el);
         const g = h('div', 'grid', '', ov.el);
         SEC.forEach((s, i) => { const bt = h('button', 'card' + (done[i] != null ? ' dn' : ''), `<b>${s.ic} ${s.name}</b><br><small>${s.desc}</small><br>${done[i] == null ? '⬜ 아직 안 했어요' : `✅ ${done[i]}점 (다시 도전 가능)`}`, g); bt.onclick = () => { c.sfx.click(); run(i); }; });
-        h('div', 'fb', `🔊 음성 합성: ${sp.hasVoice(L.lang) ? '사용 가능' : '음성 없음 → 대본으로 대체'}  ·  🎤 음성 인식: ${sp.canListen() ? '사용 가능(마이크 허용 필요)' : '미지원 → 읽기 확인으로 대체'}`, ov.el);
+        h('div', 'fb', `🔊 음성 합성: ${sp.hasLangVoice(L.lang) ? '사용 가능' : L.short + ' 음성이 없을 수 있어요(안 들리면 대본이 떠요)'}  ·  🎤 음성 인식: ${sp.canListen() ? '사용 가능(마이크 허용 필요)' : '미지원 → 읽기 확인으로 대체'}`, ov.el);
         const row = h('div', 'row', '', ov.el);
         if (done.every((d) => d != null)) { const f = h('button', 'pri', '📊 종합 결과 보기', row); f.onclick = final; }
         else h('small', '', `${done.filter((d) => d != null).length}/4 완료 · 4개를 모두 마치면 종합 결과가 열려요`, row);
@@ -311,7 +328,7 @@ function langTest(id, L) {
         h('div', 'big', `종합 ${avg}점`, b);
         const tier = avg >= 90 ? '🏆 통번역가 후보 수준! 현장에서 바로 통할 만큼 정확해요.' : avg >= 70 ? '👍 의사소통이 아주 잘 돼요. 조금만 다듬으면 통번역 실무도 도전할 만해요.' : avg >= 50 ? '🙂 기본기는 충분해요. 학과에서 체계적으로 배우면 크게 늘어요.' : '🌱 지금부터 시작이에요! 입문 수업부터 차근차근 배울 수 있어요.';
         h('div', 'fb', `${tier}\n더 키우면 좋은 영역: 「${SEC[w].name}」\n${L.career}\n※ 체험용 간이 진단이며 공인 어학 점수가 아니에요.`, b);
-        const row = h('div', 'row', '', b), ok = h('button', 'pri', '✔ 체험 완료', row);
+        const row = h('div', 'row stk', '', b), ok = h('button', 'pri', '✔ 체험 완료', row);
         ok.onclick = () => { if (ended) return; ended = true; if (ov) { ov.destroy(); ov = null; } c.finish(avg); };
         const back = h('button', '', '← 부스로 돌아가기', row); back.onclick = menu;
       }
