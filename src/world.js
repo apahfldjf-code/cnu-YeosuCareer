@@ -352,7 +352,7 @@ function buildCampus(scene) {
   const markers = { todo: emojiTex('❗'), done: emojiTex('✅') };
   function makeBooth(d, i, x, z) {
     const C = COLLEGES[d.col], c3 = new THREE.Color(C.color).offsetHSL(((i % 6) - 2.5) * 0.012, 0, ((i % 3) - 1) * 0.035), cc = '#' + c3.getHexString();
-    const g = new THREE.Group(); g.position.set(x, 0, z); const ry = Math.atan2(-x, -z); g.rotation.y = ry; root.add(g);
+    const g = new THREE.Group(); g.position.set(x, -0.2, z); const ry = Math.atan2(-x, -z); g.rotation.y = ry; root.add(g);
     const part = (geo, mat, px, py, pz, cast = true) => { const o = new THREE.Mesh(geo, mat); o.position.set(px, py, pz); o.castShadow = cast; o.receiveShadow = true; g.add(o); return o; };
     const bm = (w, h, dd, mat, px, py, pz) => part(rbox(w, h, dd), mat, px, py, pz);
     bm(9, 0.25, 8, M('#f4f1ea'), 0, 0.12, 0); bm(7.6, 0.05, 6.6, M(cc), 0, 0.27, 0.2);
@@ -384,7 +384,7 @@ function buildCampus(scene) {
     part(rcyl(0.07, 0.07, 6.4, 6), M('#e8e8e8'), 5.2, 3.2, 3.9);
     const fl = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.6), bMat[d.col]); fl.position.set(5.9, 4.7, 3.9); g.add(fl);
     const look = { skin: '#f5c9a0', hair: ['#2b1b12', '#5a3a22', '#c9a24a'][i % 3], hairStyle: ['short', 'bob', 'long', 'pony'][i % 4], uniform: '#1f3b73', bag: '#e0a43a' };
-    const npc = createCharacter(look, { coat: cc }); npc.group.position.set(0, 0.12, -2.6); g.add(npc.group);
+    const npc = createCharacter(look, { coat: cc }); npc.group.position.set(0, 0.3, -2.6); g.add(npc.group);
    const name = label(d.name, { bg: cc, scale: 9 }); name.position.set(0, 7.6, 0); g.add(name);
     const marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: markers.todo, transparent: true, depthWrite: false, fog: false })); marker.scale.set(1.8, 1.8, 1); marker.position.set(0, 11.2, 0); g.add(marker);
     const s = Math.sin(ry), c = Math.cos(ry);
