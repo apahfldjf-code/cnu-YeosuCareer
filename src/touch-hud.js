@@ -1,23 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════
- * src/touch-hud.js (U3 v2) — 모바일 화면 정리
+ * src/touch-hud.js (v4 통교체) — 모바일 화면 정리
  *
- * 1) 부스 앞에 뜨는 "체험하기" 상자를 눌러서 바로 체험을 시작합니다.
- *    - 부스, 리포트 단말기, 레이싱 센터, 포털, FPS 줍기(F), 카트 내리기에 똑같이 적용돼요.
- *    - 화면에 보이던 [E]/[F] 글자는 모바일에서 지우고, 눌러 보라는 ▶ 표시를 붙입니다.
- * 2) 좌측(현황 카드) · 우측(미니맵·리포트·메뉴·조작 버튼) · 하단(단축바)을 작게 줄이고 겹치지 않게 재배치합니다.
- *    - 조작 버튼은 input.js 를 고치지 않고, 버튼 안의 이모지를 보고 찾아서 자리를 다시 잡습니다.
+ * 이 파일이 하는 일 (딱 3가지)
+ *  1) 부스 앞 "체험하기" 상자를 눌러서 바로 실행 (부스·리포트·레이싱센터·포털·FPS 교체줍기·카트 내리기 공통)
+ *  2) 좌측(현황 카드) · 우측(미니맵·리포트·메뉴) · 하단(단축바 DOGBAR) 축소
+ *  3) 우측 하단 조작 버튼(공격·강타·점프·✋·재장전·시점·카트용 🌀🛑✖)을 이모지로 찾아 재배치
  *
- * v2 변경점
- *   - 하단 단축바(DOGBAR) 크기 50% 축소 (CFG.bar)
- *   - 우측 하단 조작 버튼(공격·강타·점프·✋) 50% 확대 (CFG.act)
- *   - 카트 탈 때: 🌀 드리프트가 공격 버튼 자리(가장 큰 버튼), 🛑 브레이크는 점프 버튼 자리, ✖ 레이스 취소는 강타 버튼 자리
- *   - 재장전·시점전환(FPS)은 점프 버튼 위로 이동
+ * v4 변경점
+ *  - FPS 월드의 체력바·탄약·무기칸은 이제 fps-ui.js 가 담당합니다.
+ *    (예전에 이 파일에서 건드리던 #hpbox / #ammobox / 탄약 줄이기 / 상단 고정 코드는 모두 삭제)
+ *  - 조작 버튼을 찾을 때 #fpsui(FPS 전용 HUD) 안의 이모지(🔫 👊 등)는 건드리지 않도록 SKIP 에 추가
+ *  - FPS 월드에서는 체험하기 상자 높이가 body.fpsw 의 --bh 값을 따라갑니다 (fps-ui.js 가 설정)
  *
- * 설치: game.js 맨 위 import 들 중 "가장 앞쪽"에 한 줄 (이미 있으면 그대로)
+ * 설치: game.js 맨 위 import 중 한 줄 (이미 있으면 그대로)
  *       import './touch-hud.js';
  *
- * 크기 조절은 아래 CFG 숫자만 바꾸면 됩니다.
- * 콘솔 확인: __thud()
+ * 크기 조절은 아래 CFG 숫자만 바꾸면 됩니다.   콘솔 확인: __thud()
  * ═══════════════════════════════════════════════════════════════ */
 import { isTouch, buzz } from './input.js';
 
@@ -26,9 +24,9 @@ const CFG = {
   map: 'clamp(64px, 24vh, 100px)',  // 미니맵 지름
   card: 0.68,                       // 좌측 현황 카드 축소 배율 (작게 → 0.6, 크게 → 0.8)
   alpha: 0.88,                      // 조작 버튼 투명도
-  act: 1.5,                         // 우측 하단 조작 버튼 배율 (1.5 = 기존보다 50% 크게, 더 키우려면 1.7)
-  bar: 0.5,                         // 하단 단축바 배율 (0.5 = 기존의 절반, 너무 작으면 0.6~0.7)
-  barMin: 22,                       // 단축바 칸 최소 크기(px) — 이보다 작아지면 손가락으로 누르기 힘들어요
+  act: 1.5,                         // 우측 하단 조작 버튼 배율 (1.5 = 기본보다 50% 크게)
+  bar: 0.5,                         // 하단 단축바 배율 (0.5 = 절반, 너무 작으면 0.6~0.7)
+  barMin: 22,                       // 단축바 칸 최소 크기(px)
 };
 
 const $ = (s) => document.querySelector(s);
@@ -49,7 +47,7 @@ body.touch #hud-right .hud-btns{position:fixed!important;top:6px!important;right
 body.touch #hud-right .hud-btns button{width:calc(var(--b)*.8)!important;height:calc(var(--b)*.8)!important;padding:0!important;
   font-size:calc(var(--b)*.42)!important;border-radius:50%!important;line-height:1!important}
 
-/* ── 하단: 단축바(DOGBAR) ── */
+/* ── 하단: 단축바(DOGBAR) — FPS 월드에서는 fps-ui.js 가 숨깁니다 ── */
 body.touch #bar{bottom:calc(3px + env(safe-area-inset-bottom,0px))!important;padding:2px!important;gap:2px!important;
   border-radius:8px!important;background:rgba(8,20,40,.5)!important}
 body.touch .slot{width:var(--sl)!important;height:var(--sl)!important;min-width:0!important;min-height:0!important;
@@ -57,11 +55,6 @@ body.touch .slot{width:var(--sl)!important;height:var(--sl)!important;min-width:
 body.touch .slot b{font-size:calc(var(--sl)*.58)!important;line-height:1!important}
 body.touch .slot i{font-size:6px!important;top:0!important;left:2px!important;line-height:1!important}
 body.touch .slot small{display:none!important}
-
-/* ── FPS 체력·탄약 ── */
-body.touch #hpbox{top:34px!important;width:150px!important;height:14px!important}
-body.touch #hptxt{line-height:14px!important;font-size:10px!important}
-body.touch #ammobox{bottom:calc(var(--bh) + 8px)!important;padding:3px 9px!important;font-size:11px!important}
 body.touch #lockhint{display:none!important}
 
 /* ── 체험하기 상자 = 누르는 버튼 ── */
@@ -89,7 +82,8 @@ const ROLES = [
   ['drift',  /🌀/u],
   ['cancel', /[✖✕❌]/u],
 ];
-const SKIP = '#bar,#modal,#modal-box,#title,#hudx,#hud,#prompt,#toast,.game-host';
+/* #fpsui / #fx 는 자기 버튼을 스스로 관리하므로 건드리지 않음 */
+const SKIP = '#bar,#modal,#modal-box,#title,#hudx,#hud,#prompt,#toast,.game-host,#fpsui,#fx';
 const found = {};
 
 function inFixed(el) {
@@ -109,28 +103,27 @@ function style(el, o) {
 }
 
 /* ── 버튼 배치 ───────────────────────────────────────────────
- *   오른쪽 아래를 기준으로 이렇게 놓아요 (K = CFG.act)
- *
+ *   오른쪽 아래 기준 (K = CFG.act)
  *            [재장전][시점]            ← FPS 에서만
  *                      [ 점프 ]
  *     [✋사용]
  *     [ 강타/조준 ]   [  공격  ]
- *   카트 탈 때는 공격 자리 = 🌀 드리프트, 점프 자리 = 🛑 브레이크, 강타 자리 = ✖ 레이스 취소
+ *   카트: 공격 자리 = 🌀 드리프트, 점프 자리 = 🛑 브레이크, 강타 자리 = ✖ 레이스 취소
  * ─────────────────────────────────────────────────────────── */
 const B = 'var(--b)';
 const K = CFG.act, AT = +(1.35 * K).toFixed(3), SM = +(0.8 * K).toFixed(3), UU = +(1.1 * K).toFixed(3);
-const G = 8, E = 10;                                         // G = 버튼 사이 간격, E = 화면 가장자리 여백(px)
+const G = 8, E = 10;                                         // G = 버튼 간격, E = 화면 가장자리 여백(px)
 const right = (extra = '0px') => `calc(${E}px + env(safe-area-inset-right,0px) + ${extra})`;
 const bottom = (extra = '0px') => `calc(${E}px + env(safe-area-inset-bottom,0px) + ${extra})`;
 
 function place(el, role) {
   const base = { position: 'fixed', left: 'auto', top: 'auto', margin: '0', padding: '0', 'border-radius': '50%', opacity: String(CFG.alpha), transform: 'none' };
   const sz = (m) => ({ width: `calc(${B}*${m})`, height: `calc(${B}*${m})`, 'min-width': '0', 'min-height': '0', 'font-size': `calc(${B}*${m}*.5)` });
-  const side = `${B}*${AT} + ${G}px`;                        // 공격 버튼 폭 + 간격
-  const rowK = `${B}*${K} + ${G}px`;                         // 기본 버튼 높이 + 간격
-  const rel = `${B}*${AT} + ${B}*${K} + ${G * 2}px`;         // 점프 버튼 위
+  const side = `${B}*${AT} + ${G}px`;
+  const rowK = `${B}*${K} + ${G}px`;
+  const rel = `${B}*${AT} + ${B}*${K} + ${G * 2}px`;
 
-  if (role === 'atk' || role === 'drift')      style(el, { ...base, ...sz(AT), right: right(), bottom: bottom() });
+  if (role === 'atk' || role === 'drift')       style(el, { ...base, ...sz(AT), right: right(), bottom: bottom() });
   else if (role === 'alt' || role === 'cancel') style(el, { ...base, ...sz(K), right: right(side), bottom: bottom() });
   else if (role === 'jump' || role === 'brake') style(el, { ...base, ...sz(K), right: right(), bottom: bottom(side) });
   else if (role === 'use')  style(el, { ...base, ...sz(UU), right: right(side), bottom: bottom(rowK) });
@@ -218,6 +211,7 @@ if (isTouch) {
 window.__thud = () => ({
   touch: isTouch,
   cfg: { act: CFG.act, bar: CFG.bar },
+  fpsWorld: document.body.classList.contains('fpsw'),
   slotPx: (() => { const s = document.querySelector('.slot'); return s ? Math.round(s.getBoundingClientRect().width) : null; })(),
   buttons: Object.fromEntries(Object.entries(found).map(([k, el]) => [k, { icon: (el.textContent || '').trim(), px: Math.round(el.getBoundingClientRect().width) }])),
   prompt: (() => { const p = $('#prompt'); return p ? { text: p.textContent, key: p.dataset.k || null, shown: getComputedStyle(p).display !== 'none' } : null; })(),
